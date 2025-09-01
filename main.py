@@ -9,7 +9,6 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-# Add src directory to Python path
 sys.path.insert(0, str(Path(__file__).parent / 'src'))
 
 from vpn_manager import VPNManager
@@ -32,11 +31,9 @@ def main():
     args = parser.parse_args()
     
     try:
-        # Load configuration from environment variables
         config_manager = ConfigManager()
         config = config_manager.load_config()
         
-        # Setup logging
         log_level = args.log_level or config['system']['log_level']
         logger = setup_logging(log_level)
         
@@ -46,13 +43,11 @@ def main():
         logger.info(f"Test Mode: {args.test_mode or config['system']['test_mode']}")
         logger.info("=" * 60)
         
-        # Initialize components
         vpn_manager = VPNManager(config['vpn_connection_name'])
         excel_reader = ExcelReader(config['excel_file_path'])
         file_processor = FileProcessor(config, args.test_mode or config['system']['test_mode'])
         notifier = Notifier(config.get('notifications', {}))
         
-        # Execute workflow
         success = execute_transfer_workflow(
             vpn_manager, excel_reader, file_processor, 
             notifier, config, logger
