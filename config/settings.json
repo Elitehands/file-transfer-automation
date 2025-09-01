@@ -1,0 +1,25 @@
+{
+    "vpn_connection_name": "bbuk vpn",
+    "remote_server_path": "Z:\\Quality Assurance(QA Common)",
+    "excel_file_path": "Z:\\Quality Assurance(QA Common)\\25.Product Status Log\\Product status Log.xlsb",
+    "batch_documents_path": "Z:\\Quality Assurance(QA Common)\\3.Batch Documents",
+    "local_gdrive_path": "G:\\BatchTransfers",
+    "filter_criteria": {
+        "initials_column": "AJ",
+        "initials_value": "PP",
+        "release_status_column": "AK",
+        "unreleased_value": ""
+    },
+    "schedule_times": ["08:00", "12:00", "16:00"],
+    "retry_attempts": 3,
+    "retry_delay_seconds": 30,
+    "notifications": {
+        "enabled": true,
+        "email": {
+            "from_address": "automation@company.com",
+            "to_addresses": ["teammate@company.com"],
+            "smtp_server": "smtp.gmail.com",
+            "smtp_port": 587
+        }
+    }
+}
