@@ -16,18 +16,14 @@ def setup_logging(log_level: str = 'INFO') -> logging.Logger:
     Returns:
         logging.Logger: Configured logger
     """
-    # Create logs directory
     log_dir = Path('logs')
     log_dir.mkdir(exist_ok=True)
     
-    # Setup root logger
     logger = logging.getLogger()
     logger.setLevel(getattr(logging, log_level.upper()))
     
-    # Clear existing handlers
     logger.handlers.clear()
     
-    # Console handler
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.INFO)
     console_format = logging.Formatter(
@@ -36,7 +32,6 @@ def setup_logging(log_level: str = 'INFO') -> logging.Logger:
     )
     console_handler.setFormatter(console_format)
     
-    # File handler with rotation
     log_file = log_dir / f"transfer_automation_{datetime.now().strftime('%Y%m%d')}.log"
     file_handler = logging.handlers.RotatingFileHandler(
         log_file, maxBytes=10*1024*1024, backupCount=5
@@ -47,7 +42,6 @@ def setup_logging(log_level: str = 'INFO') -> logging.Logger:
     )
     file_handler.setFormatter(file_format)
     
-    # Add handlers
     logger.addHandler(console_handler)
     logger.addHandler(file_handler)
     
