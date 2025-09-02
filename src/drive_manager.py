@@ -3,7 +3,7 @@
 import os
 import logging
 from pathlib import Path
-from typing import bool
+# from typing import bool  # bool is built-in in Python 3.9+
 
 
 class DriveManager:

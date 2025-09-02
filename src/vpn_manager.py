@@ -3,7 +3,7 @@
 import subprocess
 import logging
 import time
-from typing import bool
+# from typing import bool  # bool is built-in in Python 3.9+
 
 
 class VPNManager:
