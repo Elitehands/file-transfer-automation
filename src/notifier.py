@@ -1,4 +1,3 @@
-# src/notifier.py
 """Notification system for transfer results"""
 
 import smtplib
@@ -116,4 +115,14 @@ Summary:
         msg.attach(MIMEText(message, "plain"))
 
         # Send email
-        self.logger.info(f"Email notification prepared: {subject}")
+        try:
+            server = smtplib.SMTP(email_config["smtp_server"], email_config["smtp_port"])
+            server.starttls()
+            # If authentication is needed, uncomment these lines:
+            # if "username" in email_config and "password" in email_config:
+            #     server.login(email_config["username"], email_config["password"])
+            server.send_message(msg)
+            server.quit()
+            self.logger.info(f"Email notification sent: {subject}")
+        except Exception as e:
+            self.logger.error(f"Failed to send email: {str(e)}")
