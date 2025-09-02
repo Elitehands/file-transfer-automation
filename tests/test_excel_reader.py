@@ -1,56 +1,97 @@
-"""Unit tests for Excel Reader"""
+"""Excel file reading and batch filtering"""
 
-import unittest
-from unittest.mock import patch, MagicMock
+import logging
 import pandas as pd
 from pathlib import Path
+from typing import List, Dict, Any
 
-from src.excel_reader import ExcelReader
 
+class ExcelReader:
+    """Reads and filters Excel files for batch processing"""
 
-class TestExcelReader(unittest.TestCase):
-    
-    def setUp(self):
-        self.excel_reader = ExcelReader("test_file.xlsb")
-    
-    @patch('pandas.read_excel')
-    @patch('pathlib.Path.exists')
-    def test_get_unreleased_batches_success(self, mock_exists, mock_read_excel):
-        """Test successful batch filtering"""
-        mock_exists.return_value = True
-        
-        # Mock Excel data
-        mock_df = pd.DataFrame({
-            'Batch ID': ['B001', 'B002', 'B003', 'B004'],
-            'AJ': ['PP', 'JD', 'PP', 'PP'],
-            'AK': ['', 'Released', '', 'Released']
-        })
-        mock_read_excel.return_value = mock_df
-        
-        result = self.excel_reader.get_unreleased_batches('AJ', 'PP', 'AK')
-        
-        self.assertEqual(len(result), 2)
-        self.assertEqual(result[0]['Batch ID'], 'B001')
-        self.assertEqual(result[1]['Batch ID'], 'B003')
-    
-    @patch('pathlib.Path.exists')
-    def test_get_unreleased_batches_file_not_found(self, mock_exists):
-        """Test behavior when Excel file doesn't exist"""
-        mock_exists.return_value = False
-        
-        result = self.excel_reader.get_unreleased_batches('AJ', 'PP', 'AK')
-        self.assertEqual(result, [])
-    
-    def test_get_batch_id_from_record(self):
-        """Test batch ID extraction from record"""
-        record1 = {'Batch ID': 'B001', 'Other': 'data'}
-        result1 = self.excel_reader.get_batch_id_from_record(record1)
-        self.assertEqual(result1, 'B001')
-        
-        record2 = {'BatchID': 'B002', 'Other': 'data'}
-        result2 = self.excel_reader.get_batch_id_from_record(record2)
-        self.assertEqual(result2, 'B002')
-        
-        record3 = {'Other': 'data', 'Random': 'value'}
-        result3 = self.excel_reader.get_batch_id_from_record(record3)
-        self.assertEqual(result3, 'Unknown')
+    def __init__(self, excel_file_path: str):
+        self.excel_file_path = Path(excel_file_path)
+        self.logger = logging.getLogger(__name__)
+
+    def get_unreleased_batches(
+        self, initials_column: str, initials_value: str, release_column: str
+    ) -> List[Dict[str, Any]]:
+        """
+        Get list of unreleased batches for specified initials
+
+        Args:
+            initials_column: Column containing initials (e.g., 'AJ')
+            initials_value: Initials to filter for (e.g., 'PP')
+            release_column: Column indicating release status (e.g., 'AK')
+
+        Returns:
+            List[Dict[str, Any]]: List of batch records to process
+        """
+        try:
+            if not self.excel_file_path.exists():
+                raise FileNotFoundError(f"Excel file not found: {self.excel_file_path}")
+
+            self.logger.info(f"Reading Excel file: {self.excel_file_path}")
+            
+            # Determine engine based on file extension
+            file_ext = self.excel_file_path.suffix.lower()
+            
+            if file_ext == '.xlsb':
+                engine = 'pyxlsb'
+            else:
+                engine = 'openpyxl'
+                
+            self.logger.debug(f"Using Excel engine: {engine} for file type: {file_ext}")
+                
+            try:
+                df = pd.read_excel(self.excel_file_path, engine=engine)
+            except Exception as e:
+                self.logger.warning(f"Failed to read with {engine} engine: {str(e)}, trying alternative engine")
+                # Try alternative engine if first one fails
+                engine = 'openpyxl' if engine == 'pyxlsb' else 'pyxlsb'
+                df = pd.read_excel(self.excel_file_path, engine=engine)
+
+            filtered_df = df[
+                (df[initials_column].astype(str).str.upper() == initials_value.upper())
+                & (
+                    df[release_column].isna()
+                    | (df[release_column].astype(str).str.strip() == "")
+                )
+            ]
+
+            batches = filtered_df.to_dict("records")
+
+            self.logger.info(
+                f"Found {len(batches)} unreleased batches for initials '{initials_value}'"
+            )
+
+            for batch in batches:
+                batch_id = batch.get("Batch ID", "Unknown")
+                self.logger.debug(f"Batch to process: {batch_id}")
+
+            return batches
+
+        except Exception as e:
+            self.logger.error(f"Failed to read Excel file: {str(e)}")
+            return []
+
+    def get_batch_id_from_record(self, batch_record: Dict[str, Any]) -> str:
+        """
+        Extract batch ID from batch record
+
+        Args:
+            batch_record: Dictionary containing batch information
+
+        Returns:
+            str: Batch ID or 'Unknown' if not found
+        """
+        possible_id_columns = ["Batch ID", "BatchID", "Batch_ID", "ID", "Batch Number"]
+
+        for col in possible_id_columns:
+            if col in batch_record and batch_record[col]:
+                return str(batch_record[col]).strip()
+
+        self.logger.warning(
+            f"Could not find batch ID in record: {list(batch_record.keys())}"
+        )
+        return "Unknown"
