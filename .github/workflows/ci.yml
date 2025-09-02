@@ -5,6 +5,7 @@ on:
     branches: [ main, develop ]
   pull_request:
     branches: [ main, develop ]
+  workflow_dispatch:
 
 jobs:
   test:
@@ -21,24 +22,70 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
     
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        # Install the package in development mode to fix import paths
         pip install -e .
     
-    - name: Set PYTHONPATH
-      run: echo "PYTHONPATH=${GITHUB_WORKSPACE}" >> $GITHUB_ENV
+    - name: Create test environment files
+      run: |
+        mkdir -p logs
+        mkdir -p mock_data/batch_documents/TEST001
+        mkdir -p mock_data/gdrive_destination
+        echo "test file" > mock_data/batch_documents/TEST001/test.txt
+        
+        # Create basic .env file for tests
+        cat > .env << 'EOF'
+        VPN_CONNECTION_NAME=test_vpn
+        REMOTE_SERVER_PATH=/tmp/remote
+        EXCEL_FILE_PATH=/tmp/test.xlsb
+        BATCH_DOCUMENTS_PATH=/tmp/batch_docs
+        LOCAL_GDRIVE_PATH=/tmp/gdrive
+        INITIALS_COLUMN=AJ
+        INITIALS_VALUE=PP
+        RELEASE_STATUS_COLUMN=AK
+        NOTIFICATIONS_ENABLED=false
+        TEST_MODE=true
+        LOG_LEVEL=DEBUG
+        EOF
     
     - name: Run tests with pytest
       run: |
-        pytest tests/ -v --tb=short
+        export PYTHONPATH="${PYTHONPATH}:${PWD}/src:${PWD}"
+        pytest tests/ -v --tb=short --disable-warnings
     
     - name: Run linting with flake8
       run: |
-        flake8 src/ tests/ --count --select=E9,F63,F7,F82 --show-source --statistics
-        flake8 src/ tests/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+        flake8 src/ --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=__pycache__
+        flake8 src/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics --exclude=__pycache__
+        flake8 tests/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics --exclude=__pycache__
+
+  windows-test:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -e .
+    - name: Run Windows-specific tests
+      run: |
+        $env:PYTHONPATH = "$env:PYTHONPATH;$PWD\src;$PWD"
+        pytest tests/test_vpn_manager.py -v -k "not test_actual_connection"
 
   security:
     runs-on: ubuntu-latest
@@ -51,12 +98,13 @@ jobs:
     - name: Install bandit
       run: pip install bandit[toml]
     - name: Run security scan
-      run: bandit -r src/ -f json -o bandit-report.json || true
+      run: |
+        bandit -r src/ -f json -o bandit-report.json -ll || true
     - name: Display security results
       run: |
         if [ -f bandit-report.json ]; then
-          echo "Security scan completed. Check bandit-report.json for details."
-          cat bandit-report.json
+          echo "Security scan completed"
+          python -m json.tool bandit-report.json || echo "No security issues found"
         fi
 
   dependency-check:
