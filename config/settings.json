@@ -1,25 +1,40 @@
 {
-    "vpn_connection_name": "bbuk vpn",
-    "remote_server_path": "Z:\\Quality Assurance(QA Common)",
-    "excel_file_path": "Z:\\Quality Assurance(QA Common)\\25.Product Status Log\\Product status Log.xlsb",
-    "batch_documents_path": "Z:\\Quality Assurance(QA Common)\\3.Batch Documents",
-    "local_gdrive_path": "G:\\BatchTransfers",
+  "vpn": {
+    "connection_name": "bbuk vpn",
+    "max_retries": 3,
+    "retry_delay": 5
+  },
+  "paths": {
+    "remote_server": "Z:\\Quality Assurance(QA Common)",
+    "excel_file": "Z:\\Quality Assurance(QA Common)\\25.Product Status Log\\Product status Log.xlsx",
+    "batch_documents": "Z:\\Quality Assurance(QA Common)\\3.Batch Documents",
+    "local_gdrive": "G:\\My Drive\\status log"
+  },
+  "excel": {
     "filter_criteria": {
-        "initials_column": "AJ",
-        "initials_value": "PP",
-        "release_status_column": "AK",
-        "unreleased_value": ""
-    },
-    "schedule_times": ["08:00", "12:00", "16:00"],
-    "retry_attempts": 3,
-    "retry_delay_seconds": 30,
-    "notifications": {
-        "enabled": true,
-        "email": {
-            "from_address": "automation@company.com",
-            "to_addresses": ["teammate@company.com"],
-            "smtp_server": "smtp.gmail.com",
-            "smtp_port": 587
-        }
+      "initials_column": "AJ",
+      "initials_value": "PP",
+      "release_status_column": "AK"
     }
+  },
+  "notifications": {
+    "enabled": false,
+    "smtp": {
+      "server": "smtp.company.com",
+      "port": 587,
+      "username": "${SMTP_USERNAME}",
+      "password": "${SMTP_PASSWORD}",
+      "from_address": "automation@company.com"
+    },
+    "recipients": ["aneta.jell@company.com", "paul.palmer@company.com"]
+  },
+  "logging": {
+    "level": "INFO",
+    "retention_days": 30
+  },
+  "system": {
+    "test_mode": false,
+    "max_retry_attempts": 3,
+    "transfer_timeout_seconds": 300
+  }
 }
