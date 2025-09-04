@@ -3,8 +3,9 @@
 import os
 import logging
 import shutil
+from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Dict, Tuple
 
 
 class DriveManager:
@@ -71,18 +72,19 @@ class DriveManager:
             bool: True if successful, False otherwise
         """
         try:
-
             source_path = Path(source) if isinstance(source, str) else source
             dest_path = Path(destination) if isinstance(destination, str) else destination
             
             self.logger.debug(f"Copying file: {source_path} -> {dest_path}")
             
-
             self.create_directory(dest_path.parent)
             
-
             shutil.copy2(source_path, dest_path)
             
+            if not dest_path.exists() or dest_path.stat().st_size != source_path.stat().st_size:
+                self.logger.error(f"File verification failed for {dest_path}")
+                return False
+                
             self.logger.info(f"File copied successfully: {dest_path.name}")
             return True
         except Exception as e:
@@ -101,7 +103,6 @@ class DriveManager:
             List of paths to matching files
         """
         try:
-
             dir_path = Path(directory) if isinstance(directory, str) else directory
             
             self.logger.debug(f"Listing files in {dir_path} with pattern '{pattern}'")
@@ -126,45 +127,140 @@ class DriveManager:
             int: File size in bytes, or None if error
         """
         try:
-
             path_obj = Path(file_path) if isinstance(file_path, str) else file_path
             return path_obj.stat().st_size
         except Exception as e:
             self.logger.error(f"Error getting file size for {file_path}: {str(e)}")
             return None
 
-    def verify_drives(self):
+    def verify_path_writable(self, path: Union[str, Path]) -> bool:
         """
-        Verify that both remote and local paths are accessible
+        Verify that a path is writable by creating and deleting a test file
+        
+        Args:
+            path: Path to verify (string or Path object)
+            
+        Returns:
+            bool: True if writable, False otherwise
+        """
+        try:
+            path_obj = Path(path) if isinstance(path, str) else path
+            
+            if not path_obj.exists():
+                self.logger.error(f"Path does not exist: {path_obj}")
+                return False
+                
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            test_file = path_obj / f".test_write_{timestamp}.tmp"
+            
+            test_file.touch()
+            
+            if not test_file.exists():
+                self.logger.error(f"Could not create test file at {test_file}")
+                return False
+                
+            test_file.unlink()
+            self.logger.debug(f"Path {path_obj} verified as writable")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Error verifying path writability: {str(e)}")
+            return False
+
+    def verify_drives(self) -> Dict[str, bool]:
+        """
+        Verify that both remote and local paths are accessible and writable
         
         Returns:
-            bool: True if both paths are accessible, False otherwise
+            dict: Status of each drive path {"remote": bool, "gdrive": bool}
         """
+        results = {"remote": False, "gdrive": False}
+        
         try:
             self.logger.debug("Verifying drive access...")
             
-
-            if self.config:
-                remote_path = self.config["remote_server_path"]
-                local_path = self.config["local_gdrive_path"]
+            if not self.config:
+                self.logger.error("No config provided for drive verification")
+                return results
                 
-
-                if not self.is_path_accessible(remote_path):
-                    self.logger.error(f"Remote path not accessible: {remote_path}")
-                    return False
-                    
-
-                if not self.is_path_accessible(local_path):
-                    self.logger.error(f"Local path not accessible: {local_path}")
-                    return False
-                
-                self.logger.info("All drive paths verified successfully")
-                return True
+            # Support both new nested and old flat config format
+            if "paths" in self.config:
+                remote_path = self.config["paths"].get("remote_server")
+                local_path = self.config["paths"].get("local_gdrive")
             else:
-
-                self.logger.debug("No config provided for drive verification")
-                return True
+                remote_path = self.config.get("remote_server_path")
+                local_path = self.config.get("local_gdrive_path")
+            
+            if not self.is_path_accessible(remote_path):
+                self.logger.error(f"Remote path not accessible: {remote_path}")
+            else:
+                results["remote"] = self.verify_path_writable(remote_path)
+                
+            if not self.is_path_accessible(local_path):
+                self.logger.error(f"Google Drive path not accessible: {local_path}")
+            else:
+                results["gdrive"] = self.verify_path_writable(local_path)
+            
+            if results["remote"] and results["gdrive"]:
+                self.logger.info("All drive paths verified and writable")
+            else:
+                self.logger.warning(f"Drive verification issues: {results}")
+                
+            return results
             
         except Exception as e:
             self.logger.error(f"Error verifying drives: {str(e)}")
+            return results
+            
+    def create_destination_folder(self, batch_id: str) -> Optional[Path]:
+        """
+        Create a destination folder for batch files with timestamp
+        
+        Args:
+            batch_id: Batch identifier
+            
+        Returns:
+            Path object to created folder or None if failed
+        """
+        try:
+            if not self.config:
+                self.logger.error("No config provided for destination folder creation")
+                return None
+                
+            # Support both new nested and old flat config format
+            if "paths" in self.config:
+                gdrive_path = Path(self.config["paths"].get("local_gdrive"))
+            else:
+                gdrive_path = Path(self.config.get("local_gdrive_path"))
+                
+            timestamp = datetime.now().strftime("%Y%m%d")
+            dest_folder = gdrive_path / f"{batch_id}_{timestamp}"
+            
+            self.logger.info(f"Creating destination folder: {dest_folder}")
+            
+            if self.create_directory(dest_folder):
+                return dest_folder
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"Error creating destination folder: {str(e)}")
+            return None
+
+    def verify_gdrive_mount(self) -> bool:
+        """
+        Verify Google Drive is mounted and accessible
+        
+        Returns:
+            bool: True if Google Drive is accessible and writable
+        """
+        if not self.config:
+            self.logger.error("No config provided for drive verification")
             return False
+            
+        # Support both new nested and old flat config format
+        if "paths" in self.config:
+            gdrive_path = self.config["paths"].get("local_gdrive")
+        else:
+            gdrive_path = self.config.get("local_gdrive_path")
+            
+        return self.verify_path_writable(gdrive_path)
