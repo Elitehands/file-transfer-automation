@@ -1,104 +1,111 @@
-"""Build script for creating executable with PyInstaller"""
-import os
+"""Build and test script for File Transfer Automation"""
+
+import subprocess
 import sys
 import shutil
-import subprocess
+import os
 from pathlib import Path
+import argparse
 
-def clean_previous_build():
-    """Remove previous build artifacts"""
-    print("Cleaning previous build artifacts...")
-    if Path("dist").exists():
-        shutil.rmtree("dist")
-    if Path("build").exists():
-        shutil.rmtree("build")
-    for item in Path(".").glob("*.spec"):
-        item.unlink()
+# Project paths
+PROJECT_ROOT = Path(__file__).parent
+DIST_DIR = PROJECT_ROOT / "dist"
+BUILD_DIR = PROJECT_ROOT / "build"
 
-def build_executable():
-    """Build the executable using PyInstaller"""
-    print("Building executable with PyInstaller...")
+def clean():
+    """Clean build directories"""
+    print("Cleaning build directories...")
+    for directory in [DIST_DIR, BUILD_DIR]:
+        if directory.exists():
+            shutil.rmtree(directory)
     
-
-    with open("version.txt", "w") as f:
-        from datetime import datetime
-        f.write(f"Build: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    # Remove spec files
+    for spec_file in PROJECT_ROOT.glob("*.spec"):
+        spec_file.unlink()
     
-    # PyInstaller command
-    cmd = [
-        "pyinstaller",
-        "--onefile",
-        "--name=file_transfer_automation",
-        "--add-data=version.txt;.",
-        "--icon=resources/icon.ico" if Path("resources/icon.ico").exists() else "",
-        "--noconsole",  # Remove this if you want console output
-        "main.py"
-    ]
+    print("Clean complete.")
+
+def run_tests():
+    """Run all tests using unittest discover"""
+    print("Running tests...")
     
-
-    cmd = [arg for arg in cmd if arg]
+    # Make sure src directory is in path
+    src_path = PROJECT_ROOT / "src"
+    if src_path.exists() and str(src_path) not in sys.path:
+        sys.path.insert(0, str(src_path))
     
-    # Run PyInstaller
-    result = subprocess.run(cmd)
-    
-    if result.returncode != 0:
-        print("Error building executable")
-        sys.exit(1)
-    
-    print(f"Executable built successfully: {Path('dist/file_transfer_automation.exe').absolute()}")
-    
-
-    copy_additional_files()
-
-def copy_additional_files():
-    """Copy additional files to dist directory"""
-    print("Copying additional files...")
-    
-
-    with open("dist/.env.example", "w") as f:
-        f.write("""# File Transfer Automation Configuration
-VPN_CONNECTION_NAME=bbuk vpn
-VPN_SERVER=vpn.bbukltd.com
-
-# File Paths (Update these based on actual drive mappings)
-REMOTE_SERVER_PATH=Z:\\Quality Assurance(QA Common)
-EXCEL_FILE_PATH=Z:\\Quality Assurance(QA Common)\\25.Product Status Log\\Product status Log.xlsb
-BATCH_DOCUMENTS_PATH=Z:\\Quality Assurance(QA Common)\\3.Batch Documents
-LOCAL_GDRIVE_PATH=G:\\My Drive\\status log
-
-# Excel Filter Configuration
-INITIALS_COLUMN=AJ
-INITIALS_VALUE=PP
-RELEASE_STATUS_COLUMN=AK
-
-# Logging Configuration
-LOG_LEVEL=INFO
-LOG_RETENTION_DAYS=30
-
-# Notification Configuration
-NOTIFICATIONS_ENABLED=false
-SMTP_SERVER=smtp.company.com
-SMTP_PORT=587
-FROM_EMAIL=automation@company.com
-TO_EMAILS=example@company.com
-
-# System Configuration
-TEST_MODE=false
-MAX_RETRY_ATTEMPTS=3
-TRANSFER_TIMEOUT_SECONDS=300
-""")
-
-
-    if Path("docs").exists():
-        if not Path("dist/docs").exists():
-            Path("dist/docs").mkdir()
+    # Run tests
+    try:
+        import unittest
+        tests = unittest.defaultTestLoader.discover(".", pattern="test_*.py")
+        test_runner = unittest.TextTestRunner(verbosity=2)
+        result = test_runner.run(tests)
         
-        for doc_file in Path("docs").glob("*.md"):
-            shutil.copy(doc_file, f"dist/docs/{doc_file.name}")
+        print(f"\nTests run: {result.testsRun}")
+        print(f"Errors: {len(result.errors)}")
+        print(f"Failures: {len(result.failures)}")
+        
+        return result.wasSuccessful()
+    except Exception as e:
+        print(f"Error running tests: {e}")
+        return False
+
+def build_demo():
+    """Build demo application"""
+    print("Building demo application...")
+    try:
+        subprocess.run([
+            "pyinstaller",
+            "--onefile",
+            "--name=FileTransferDemo",
+            "demo_app.py"
+        ], check=True)
+        print("Build successful!")
+        return True
+    except Exception as e:
+        print(f"Build failed: {e}")
+        return False
+
+def main():
+    """Main function"""
+    parser = argparse.ArgumentParser(description="Build and test File Transfer Automation")
+    parser.add_argument("--test", action="store_true", help="Run tests only")
+    parser.add_argument("--build", action="store_true", help="Build only (skip tests)")
+    parser.add_argument("--clean", action="store_true", help="Clean only")
+    args = parser.parse_args()
     
-    print("Additional files copied successfully")
+    # Print header
+    print("=" * 70)
+    print(f" FILE TRANSFER AUTOMATION - BUILD TOOL")
+    print("=" * 70)
+    print(f"Date: 2025-09-04 08:10:25")
+    print(f"User: {os.environ.get('USERNAME', 'TobiWilliams001')}")
+    print("=" * 70)
+    
+    # Clean is always performed unless only testing
+    if not args.test or args.clean:
+        clean()
+        
+    if args.clean:
+        return 0
+        
+    # Run tests unless build-only specified
+    tests_passed = True
+    if not args.build:
+        tests_passed = run_tests()
+        if not tests_passed and not args.test:
+            print("Tests failed! Build aborted.")
+            return 1
+    
+    # Build unless test-only specified
+    if not args.test and (tests_passed or args.build):
+        if build_demo():
+            print(f"Demo built successfully: {DIST_DIR}/FileTransferDemo.exe")
+        else:
+            print("Build failed!")
+            return 1
+    
+    return 0
 
 if __name__ == "__main__":
-    clean_previous_build()
-    build_executable()
-    print("Build complete!")
+    sys.exit(main())

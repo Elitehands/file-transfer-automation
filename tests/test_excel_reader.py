@@ -33,7 +33,6 @@ class ExcelReader:
 
             self.logger.info(f"Reading Excel file: {self.excel_file_path}")
             
-            # Determine engine based on file extension
             file_ext = self.excel_file_path.suffix.lower()
             
             if file_ext == '.xlsb':
@@ -47,7 +46,7 @@ class ExcelReader:
                 df = pd.read_excel(self.excel_file_path, engine=engine)
             except Exception as e:
                 self.logger.warning(f"Failed to read with {engine} engine: {str(e)}, trying alternative engine")
-                # Try alternative engine if first one fails
+
                 engine = 'openpyxl' if engine == 'pyxlsb' else 'pyxlsb'
                 df = pd.read_excel(self.excel_file_path, engine=engine)
 
