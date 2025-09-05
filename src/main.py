@@ -10,8 +10,8 @@ from src.notifications import send_completion_email
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from settings import load_config, get_paths, get_filter_criteria
-from transfer import verify_paths, read_excel_batches, process_all_batches
+from src.settings import load_config, get_paths, get_filter_criteria
+from src.transfer import verify_paths, read_excel_batches, process_all_batches
 
 def setup_logging(level: str = "INFO") -> None:
     """Setup simple logging"""
