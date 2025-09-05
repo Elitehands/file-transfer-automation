@@ -47,7 +47,7 @@ Timestamp: {datetime.now()}
 
 Please check the system and logs immediately.
 
-This is an automated message from BBU File Transfer System.
+This is an automated message from  File Transfer System.
             """
 
             self._send_email(subject, message)
@@ -65,7 +65,7 @@ This is an automated message from BBU File Transfer System.
         )
 
         message = f"""
-BBU File Transfer Automation - Completion Report
+ File Transfer Automation - Completion Report
 
 Summary:
 - Total Batches Processed: {results['total_batches']}
@@ -93,7 +93,7 @@ Summary:
                     )
 
         message += f"\nTimestamp: {datetime.now()}\n"
-        message += "This is an automated message from BBU File Transfer System."
+        message += "This is an automated message from  File Transfer System."
 
         return message
 

@@ -12,7 +12,6 @@ def test_vpn_is_connected():
     """Skip complex VPN connected status test"""
     pass
 
-# Simple test that doesn't require mocking
 def test_vpn_initialization():
     """Simple initialization test"""
     vpn = VPNManager("test_vpn", test_mode=True)
