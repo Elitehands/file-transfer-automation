@@ -1,0 +1,38 @@
+{
+  "vpn": {
+    "connection_name": "bbuk vpn",
+    "max_retries": 3,
+    "retry_delay": 5
+  },
+  "paths": {
+    "remote_server": "Z:\\Quality Assurance(QA Common)",
+    "excel_file": "Z:\\Quality Assurance(QA Common)\\25.Product Status Log\\Product status Log.xlsx",
+    "batch_documents": "Z:\\Quality Assurance(QA Common)\\3.Batch Documents",
+    "local_gdrive": "G:\\My Drive\\status log"
+  },
+  "excel": {
+    "filter_criteria": {
+      "initials_column": "AJ",
+      "initials_value": "PP",
+      "release_status_column": "AK"
+    }
+  },
+  "notifications": {
+    "enabled": true,
+    "smtp": {
+      "server": "smtp.gmail.com",
+      "port": 587
+    },
+    "recipients": ["completion@company.com"],
+    "qa_recipients": ["aneta.jell@company.com", "paul.palmer@company.com"]
+  },
+  "logging": {
+    "level": "INFO",
+    "retention_days": 30
+  },
+  "system": {
+    "test_mode": false,
+    "max_retry_attempts": 3,
+    "transfer_timeout_seconds": 300
+  }
+}
