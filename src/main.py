@@ -5,8 +5,8 @@ import logging
 import argparse
 from datetime import datetime
 from pathlib import Path
-from vpn import ensure_vpn_connection
-from notifications import send_completion_email
+from src.vpn import ensure_vpn_connection
+from src.notifications import send_completion_email
 
 sys.path.insert(0, str(Path(__file__).parent))
 
