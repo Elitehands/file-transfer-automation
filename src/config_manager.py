@@ -1,24 +1,30 @@
-"""Configuration manager that loads from settings.json or .env"""
+"""Configuration manager loads from settings.json with environment variable substitution"""
 
 import os
 import json
+import re
 import logging
 from pathlib import Path
-from dotenv import load_dotenv
+from typing import Dict, Any
+
 
 class ConfigManager:
-    """Manages application configuration from multiple sources"""
+    """Manages application configuration with settings.json as source of truth"""
 
-    def __init__(self, env_file=None):
+    ENV_PATTERN = re.compile(r'\${([A-Za-z0-9_]+)}')
+    
+    def __init__(self, env_file=None, config_path=None):
         self.logger = logging.getLogger(__name__)
         self.config = {}
         self.env_file = env_file
-
-    def load_config(self):
-        """Load configuration from settings.json and environment variables"""
+        self.config_path = config_path
+        
+    def load_config(self) -> Dict[str, Any]:
+        """Load configuration from settings.json and substitute environment variables"""
         try:
             self._load_from_settings_json()
-            self._load_from_env()
+            self._substitute_env_variables()
+            self._apply_cli_overrides()
             self._validate_config()
             return self.config
         except Exception as e:
@@ -27,8 +33,13 @@ class ConfigManager:
 
     def _load_from_settings_json(self):
         """Load configuration from settings.json file"""
-        # Simplified path checking
-        for path in ["config/settings.json", "settings.json"]:
+        search_paths = [
+            self.config_path if self.config_path else None,
+            "config/settings.json",
+            "settings.json"
+        ]
+        
+        for path in [p for p in search_paths if p]:
             if Path(path).exists():
                 try:
                     with open(path, "r") as f:
@@ -39,79 +50,94 @@ class ConfigManager:
                     self.logger.error(f"Error loading {path}: {str(e)}")
                     
         self.logger.warning("settings.json not found, using defaults")
-        self.config = {}
-
-    def _load_from_env(self):
-        """Load configuration from environment variables or .env file"""
-        # Load .env file
-        if self.env_file and Path(self.env_file).exists():
-            load_dotenv(self.env_file)
-            self.logger.info(f"Loaded environment from {self.env_file}")
-        else:
-            for env_path in [".env", "config/.env"]:
-                if Path(env_path).exists():
-                    load_dotenv(env_path)
-                    self.logger.info(f"Loaded environment from {env_path}")
-                    break
-
-        # Simplified env mapping with direct keys
-        env_vars = {
-            "VPN_CONNECTION_NAME": "vpn_connection_name",
-            "REMOTE_SERVER_PATH": "remote_server_path",
-            "EXCEL_FILE_PATH": "excel_file_path",
-            "BATCH_DOCUMENTS_PATH": "batch_documents_path",
-            "LOCAL_GDRIVE_PATH": "local_gdrive_path",
-            "TEST_MODE": "test_mode",
-            "LOG_LEVEL": "log_level"
+        self.config = {
+            "vpn": {"connection_name": "bbuk vpn"},
+            "paths": {
+                "remote_server": "Z:\\Quality Assurance(QA Common)",
+                "excel_file": "Z:\\Quality Assurance(QA Common)\\25.Product Status Log\\Product status Log.xlsx",
+                "batch_documents": "Z:\\Quality Assurance(QA Common)\\3.Batch Documents",
+                "local_gdrive": "G:\\My Drive\\status log"
+            },
+            "excel": {"filter_criteria": {"initials_column": "AJ", "initials_value": "PP", "release_status_column": "AK"}},
+            "notifications": {"enabled": False},
+            "system": {"test_mode": False}
         }
-        
-        # Process simple key mappings
-        for env_var, config_key in env_vars.items():
-            if env_var in os.environ:
-                value = os.environ[env_var]
-                if value.lower() in ["true", "false"]:
-                    value = value.lower() == "true"
-                self.config[config_key] = value
-        
-        # Handle nested keys separately - keeps code cleaner
-        if "INITIALS_COLUMN" in os.environ:
-            if "filter_criteria" not in self.config:
-                self.config["filter_criteria"] = {}
-            self.config["filter_criteria"]["initials_column"] = os.environ["INITIALS_COLUMN"]
-            
-        if "INITIALS_VALUE" in os.environ:
-            if "filter_criteria" not in self.config:
-                self.config["filter_criteria"] = {}
-            self.config["filter_criteria"]["initials_value"] = os.environ["INITIALS_VALUE"]
-            
-        if "RELEASE_STATUS_COLUMN" in os.environ:
-            if "filter_criteria" not in self.config:
-                self.config["filter_criteria"] = {}
-            self.config["filter_criteria"]["release_status_column"] = os.environ["RELEASE_STATUS_COLUMN"]
+
+    def _substitute_env_variables(self):
+        """Replace ${ENV_VAR} patterns with environment variables"""
+        def _replace_env_vars(obj):
+            if isinstance(obj, str):
+                matches = self.ENV_PATTERN.findall(obj)
+                if matches:
+                    result = obj
+                    for env_var in matches:
+                        env_value = os.environ.get(env_var, "")
+                        if not env_value and env_var.endswith("_PASSWORD"):
+                            self.logger.warning(f"Environment variable {env_var} not found. Using empty string for security.")
+                        elif not env_value:
+                            self.logger.warning(f"Environment variable {env_var} not found")
+                        placeholder = f"${{{env_var}}}"
+                        result = result.replace(placeholder, env_value)
+                    return result
+                return obj
+            elif isinstance(obj, dict):
+                return {k: _replace_env_vars(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [_replace_env_vars(i) for i in obj]
+            else:
+                return obj
+                
+        self.config = _replace_env_vars(self.config)
+
+    def _apply_cli_overrides(self):
+        """Apply any command-line overrides that may be set"""
+        pass
 
     def _validate_config(self):
-        """Validate required configuration items exist"""
-        required_keys = [
-            "vpn_connection_name",
-            "remote_server_path",
-            "excel_file_path",
-            "batch_documents_path", 
-            "local_gdrive_path"
+        """Validate required configuration values"""
+        required_sections = ["vpn", "paths", "excel"]
+        for section in required_sections:
+            if section not in self.config:
+                self.logger.error(f"Missing required configuration section: {section}")
+                self.config[section] = {}
+
+        required_paths = [
+            "remote_server", 
+            "excel_file", 
+            "batch_documents", 
+            "local_gdrive"
         ]
         
-        # Default values all in one place
-        defaults = {
-            "test_mode": False,
-            "log_level": "INFO"
-        }
+        for path_key in required_paths:
+            if path_key not in self.config["paths"]:
+                self.logger.error(f"Missing required path configuration: {path_key}")
+                self.config["paths"][path_key] = f"MISSING_{path_key.upper()}"
+
+    def get_flattened_config(self) -> Dict[str, Any]:
+        """
+        Get a flattened version of config for backward compatibility
         
-        # Apply defaults
-        for key, value in defaults.items():
-            if key not in self.config:
-                self.config[key] = value
-                
-        # Check required keys
-        for key in required_keys:
-            if key not in self.config:
-                self.logger.error(f"Missing required configuration: {key}")
-                self.config[key] = "MISSING_REQUIRED_CONFIG"
+        This helps transition from the old flat structure to the new nested structure
+        """
+        flat_config = {}
+        
+        if "vpn" in self.config:
+            flat_config["vpn_connection_name"] = self.config["vpn"].get("connection_name")
+        
+        if "paths" in self.config:
+            flat_config["remote_server_path"] = self.config["paths"].get("remote_server")
+            flat_config["excel_file_path"] = self.config["paths"].get("excel_file")
+            flat_config["batch_documents_path"] = self.config["paths"].get("batch_documents")
+            flat_config["local_gdrive_path"] = self.config["paths"].get("local_gdrive")
+        
+        if "excel" in self.config and "filter_criteria" in self.config["excel"]:
+            flat_config["filter_criteria"] = self.config["excel"]["filter_criteria"]
+        
+        if "notifications" in self.config:
+            flat_config["notifications"] = self.config["notifications"]
+        
+        if "system" in self.config:
+            for key, value in self.config["system"].items():
+                flat_config[key] = value
+            
+        return flat_config
