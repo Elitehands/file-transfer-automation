@@ -1,120 +1,47 @@
-"""Integration tests for the complete workflow"""
-
-import unittest
+# tests/test_integration.py
+"""Integration tests that can run without actual files"""
+import pytest
 from unittest.mock import patch, MagicMock
-import tempfile
-import json
-import sys
-import os
-from pathlib import Path
+from src.main import run_transfer_workflow
 
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
-sys.path.insert(0, str(project_root / 'src'))
-
-import main
-from src.vpn_manager import VPNManager
-from src.excel_reader import ExcelReader
-from src.file_processor import FileProcessor
-from src.notifier import Notifier
-from src.config_manager import ConfigManager
-from src.drive_manager import DriveManager
-
-
-class TestIntegration(unittest.TestCase):
-    """Integration tests that can be run locally with mock data"""
+@patch('src.main.ensure_vpn_connection')
+@patch('src.main.verify_paths') 
+@patch('src.main.read_excel_batches')
+@patch('src.main.process_all_batches')
+@patch('src.main.send_completion_email')
+def test_successful_workflow(mock_email, mock_process, mock_excel, mock_verify, mock_vpn):
+    """Test complete workflow with mocks"""
+    # Setup mocks
+    mock_vpn.return_value = True
+    mock_verify.return_value = True
+    mock_excel.return_value = [{"Batch ID": "TEST001"}]
+    mock_process.return_value = {
+        "total_batches": 1,
+        "successful_transfers": 1, 
+        "failed_transfers": 0,
+        "total_files_copied": 5
+    }
+    mock_email.return_value = True
     
-    def setUp(self):
-
-        self.config = {
-            'vpn_connection_name': 'test_vpn',
-            'remote_server_path': '/tmp/remote',
-            'excel_file_path': '/tmp/test.xlsb',
-            'batch_documents_path': '/tmp/batch_docs',
-            'local_gdrive_path': '/tmp/gdrive',
-            'filter_criteria': {
-                'initials_column': 'AJ',
-                'initials_value': 'PP',
-                'release_status_column': 'AK'
-            },
-            'notifications': {
-                'enabled': False
-            },
-            'system': {
-                'test_mode': True,
-                'log_level': 'DEBUG'
+    config = {
+        "vpn": {"connection_name": "test_vpn"},
+        "paths": {
+            "remote_server": "/test", "excel_file": "/test.xlsx",
+            "batch_documents": "/test", "local_gdrive": "/test"
+        },
+        "excel": {
+            "filter_criteria": {
+                "initials_column": "AJ", "initials_value": "PP", 
+                "release_status_column": "AK"
             }
         }
+    }
     
-    @patch.object(VPNManager, 'verify_and_connect')
-    @patch('pathlib.Path.exists')
-    @patch.object(ExcelReader, 'get_unreleased_batches')
-    @patch.object(FileProcessor, 'process_batches')
-    @patch.object(Notifier, 'send_completion_notification')
-    @patch.object(DriveManager, 'verify_drives')  
-    def test_successful_workflow(self, mock_verify_drives, mock_notify, mock_process, 
-                               mock_excel, mock_path_exists, mock_vpn):
-        """Test successful end-to-end workflow"""
-        # Setup mocks
-        mock_vpn.return_value = True
-        mock_verify_drives.return_value = True 
-        mock_path_exists.return_value = True
-        mock_excel.return_value = [{'Batch ID': 'TEST001', 'AJ': 'PP', 'AK': ''}]
-        mock_process.return_value = {
-            'total_batches': 1,
-            'successful_transfers': 1,
-            'failed_transfers': 0,
-            'total_files_copied': 5,
-            'errors': [],
-            'batch_details': []
-        }
-        
-
-        vpn_manager = VPNManager(self.config['vpn_connection_name'])
-        excel_reader = ExcelReader(self.config['excel_file_path'])
-        file_processor = FileProcessor(self.config, test_mode=True)
-        notifier = Notifier(self.config.get('notifications', {}))
-        drive_manager = DriveManager()  
-        logger = MagicMock()
-        
-
-        result = main.execute_transfer_workflow(
-            vpn_manager, excel_reader, file_processor, 
-            notifier, drive_manager, self.config, logger 
-            
-        )
-        
-        self.assertTrue(result)
-        mock_vpn.assert_called_once()
-        mock_verify_drives.assert_called_once()  
-        mock_excel.assert_called_once()
-        mock_process.assert_called_once()
-
-    @patch('main.ConfigManager')
-    @patch('main.setup_logging')
-    @patch('main.DriveManager')  
-    def test_main_entry_point(self, mock_drive_manager, mock_logging, mock_config_manager):
-        """Test main entry point with test mode"""
-
-        mock_config_instance = MagicMock()
-        mock_config_instance.load_config.return_value = self.config
-        mock_config_manager.return_value = mock_config_instance
-        
-        mock_logger = MagicMock()
-        mock_logging.return_value = mock_logger
-        
-        mock_drive_manager_instance = MagicMock()
-        mock_drive_manager.return_value = mock_drive_manager_instance
-        
-
-        with patch('main.execute_transfer_workflow') as mock_workflow:
-            mock_workflow.return_value = True
-            
-
-            with patch('sys.argv', ['main.py', '--test-mode']):
-                result = main.main()
-                
-            self.assertEqual(result, 0)
-            mock_workflow.assert_called_once()
-
-            self.assertIn(mock_drive_manager_instance, mock_workflow.call_args[0])
+    result = run_transfer_workflow(config, test_mode=True)
+    assert result == True
+    
+    # Verify all functions were called
+    mock_vpn.assert_called_once()
+    mock_verify.assert_called_once()
+    mock_excel.assert_called_once()
+    mock_process.assert_called_once()
