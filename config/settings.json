@@ -18,15 +18,13 @@
     }
   },
   "notifications": {
-    "enabled": false,
+    "enabled": true,
     "smtp": {
-      "server": "smtp.company.com",
-      "port": 587,
-      "username": "${SMTP_USERNAME}",
-      "password": "${SMTP_PASSWORD}",
-      "from_address": "automation@company.com"
+      "server": "smtp.gmail.com",
+      "port": 587
     },
-    "recipients": ["aneta.jell@company.com", "paul.palmer@company.com"]
+    "recipients": ["completion@company.com"],
+    "qa_recipients": ["aneta.jell@company.com", "paul.palmer@company.com"]
   },
   "logging": {
     "level": "INFO",
