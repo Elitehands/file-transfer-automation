@@ -1,0 +1,18 @@
+{
+  "paths": {
+    "remote_server": "C:\\Users\\HomePC\\Desktop\\file_transfer_automation\\mock_data",
+    "excel_file": "C:\\Users\\HomePC\\Desktop\\file_transfer_automation\\mock_data\\excel\\test.xlsx",
+    "batch_documents": "C:\\Users\\HomePC\\Desktop\\file_transfer_automation\\mock_data\\batch_documents",
+    "local_gdrive": "C:\\Users\\HomePC\\Desktop\\file_transfer_automation\\mock_data\\gdrive"
+  },
+  "excel": {
+    "filter_criteria": {
+      "initials_column": "AJ",
+      "initials_value": "PP",
+      "release_status_column": "AK"
+    }
+  },
+  "notifications": {
+    "enabled": false
+  }
+}

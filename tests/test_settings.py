@@ -1,4 +1,3 @@
-# tests/test_settings.py
 """Test configuration loading"""
 import pytest
 import tempfile

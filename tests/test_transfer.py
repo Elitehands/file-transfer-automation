@@ -1,4 +1,3 @@
-# tests/test_transfer.py  
 """Test transfer functionality"""
 import pytest
 import tempfile
@@ -27,7 +26,6 @@ def test_verify_paths_success():
             "local_gdrive": temp_dir
         }
         
-        # Create the excel file
         Path(paths["excel_file"]).touch()
         
         result = verify_paths(paths)
