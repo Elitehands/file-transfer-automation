@@ -1,8 +1,11 @@
-"""Email notifications for transfer results"""
+"""Email notifications for transfer results and QA"""
 
 import smtplib
 import logging
 import os
+import sys
+import argparse
+from pathlib import Path
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
@@ -113,7 +116,7 @@ def test_email_notification():
     if not username or not password:
         print("❌ Set environment variables first:")
         print("SMTP_USERNAME=Jibolasherpad@gmail.com")
-        print("SMTP_PASSWORD=dhan tyit amsz tojk")
+        print("SMTP_PASSWORD=your-app-password-here")
         return False
 
     config = {
@@ -145,4 +148,82 @@ def test_email_notification():
 
 
 if __name__ == "__main__":
-    test_email_notification()
+    """Test email functionality independently"""
+    
+    logging.basicConfig(level=logging.INFO, 
+                       format='%(asctime)s - %(levelname)s - %(message)s')
+    
+    parser = argparse.ArgumentParser(description="Test Email Notifications")
+    parser.add_argument("--config", help="Path to config file")
+    parser.add_argument("--test-smtp", action="store_true", help="Test SMTP with environment variables")
+    parser.add_argument("--check-env", action="store_true", help="Check environment variables")
+    args = parser.parse_args()
+    
+    if args.check_env:
+        print("Checking environment variables...")
+        username = os.getenv("SMTP_USERNAME")
+        password = os.getenv("SMTP_PASSWORD")
+        
+        print(f"SMTP_USERNAME: {'✅ Set' if username else '❌ Missing'}")
+        print(f"SMTP_PASSWORD: {'✅ Set' if password else '❌ Missing'}")
+        
+        if username:
+            print(f"Username: {username}")
+        
+        sys.exit(0 if (username and password) else 1)
+    
+    if args.test_smtp:
+        success = test_email_notification()
+        sys.exit(0 if success else 1)
+    
+    if args.config:
+        try:
+            # import for standalone execution
+            try:
+                from src.settings import load_config
+            except ImportError:
+                sys.path.insert(0, str(Path(__file__).parent.parent))
+                from src.settings import load_config
+            
+            print(f"Testing with config file: {args.config}")
+            config = load_config(args.config)
+            
+            notifications = config.get("notifications", {})
+            enabled = notifications.get("enabled", False)
+            recipients = notifications.get("recipients", [])
+            
+            print(f"Notifications enabled: {enabled}")
+            print(f"Recipients: {recipients}")
+            
+            if not enabled:
+                print("⚠️ Notifications are disabled in config")
+                sys.exit(0)
+            
+            # Mock results for testing
+            results = {
+                "total_batches": 3,
+                "successful_transfers": 2,
+                "failed_transfers": 1,
+                "total_files_copied": 15
+            }
+            
+            print("Sending test email with mock results...")
+            success = send_completion_email(results, config)
+            result = "✅ SUCCESS" if success else "❌ FAILED"
+            print(f"Email Test: {result}")
+            sys.exit(0 if success else 1)
+            
+        except Exception as e:
+            print(f"❌ Email test failed: {e}")
+            sys.exit(1)
+    
+    # Default: show usage
+    print("Email notification testing options:")
+    print("  --check-env           Check environment variables")
+    print("  --test-smtp          Test SMTP with environment variables")
+    print("  --config FILE        Test with config file")
+    print()
+    print("Example usage:")
+    print("  python src/notifications.py --check-env")
+    print("  python src/notifications.py --test-smtp")
+    print("  python src/notifications.py --config mock_settings.json")

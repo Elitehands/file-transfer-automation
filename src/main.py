@@ -1,14 +1,24 @@
 """File Transfer Automation - Entry Point"""
-
 import sys
 import logging
 import argparse
 from datetime import datetime
 from pathlib import Path
-from src.vpn import ensure_vpn_connection
-from src.notifications import send_completion_email
-from src.settings import load_config, get_paths, get_filter_criteria
-from src.transfer import verify_paths, read_excel_batches, process_all_batches
+#  imports to work both as module and direct execution
+try:
+    # When run as: python -m src.main (from project root)
+    from src.vpn import ensure_vpn_connection
+    from src.notifications import send_completion_email
+    from src.settings import load_config, get_paths, get_filter_criteria
+    from src.transfer import verify_paths, read_excel_batches, process_all_batches
+except ImportError:
+    # When run as: python src/main.py (directly)
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from src.vpn import ensure_vpn_connection
+    from src.notifications import send_completion_email
+    from src.settings import load_config, get_paths, get_filter_criteria
+    from src.transfer import verify_paths, read_excel_batches, process_all_batches
+
 
 sys.path.insert(0, str(Path(__file__).parent))
 

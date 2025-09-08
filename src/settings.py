@@ -1,6 +1,7 @@
-"""configuration management with settings.json as source of truth"""
+"""Configuration management with settings.json as source of truth"""
 
 import os
+import sys
 import json
 import re
 from pathlib import Path
@@ -8,23 +9,46 @@ from typing import Dict, Any
 
 
 def load_config(config_path: str = None) -> Dict[str, Any]:
-    """Load configuration from settings.json with environment variable substitution"""
-
+    """Load configuration with external file priority"""
+    
+    # Handle PyInstaller bundled executable
+    if getattr(sys, 'frozen', False):
+        # Running as compiled executable
+        bundle_dir = Path(sys._MEIPASS)  
+        external_dir = Path(sys.executable).parent  
+    else:
+        
+        bundle_dir = Path(__file__).parent.parent
+        external_dir = Path.cwd()
+    
     search_paths = [
         config_path if config_path else None,
-        "config/settings.json",
-        "settings.json"
+        # PRIORITY: External files first (can be edited by client)
+        external_dir / "settings.json",             # Next to exe
+        external_dir / "config" / "settings.json",  # In config folder next to exe
+        # FALLBACK: Internal bundled files
+        bundle_dir / "settings.json",              # Inside bundle
+        bundle_dir / "config" / "settings.json",   # Inside bundle
+        "config/settings.json",                    # Current working dir
+        "settings.json",                           # Current working dir
+        "mock_settings.json"                       # Development fallback
     ]
 
     config = None
+    config_source = None
     for path in [p for p in search_paths if p]:
         if Path(path).exists():
             with open(path, "r") as f:
                 config = json.load(f)
+            config_source = str(path)
             break
 
     if not config:
-        raise FileNotFoundError("settings.json not found")
+        available_paths = [str(p) for p in search_paths if p]
+        raise FileNotFoundError(f"settings.json not found in: {available_paths}")
+
+    # Log which config was loaded
+    print(f"Config loaded from: {config_source}")
 
     def substitute_env_vars(obj):
         if isinstance(obj, str):
@@ -65,3 +89,35 @@ def get_filter_criteria(config: Dict[str, Any]) -> Dict[str, str]:
             raise ValueError(f"Missing filter criteria: {key}")
 
     return criteria
+
+
+if __name__ == "__main__":
+    """Test configuration loading independently"""
+    import argparse
+    import logging
+    
+    logging.basicConfig(level=logging.INFO, 
+                       format='%(asctime)s - %(levelname)s - %(message)s')
+    
+    parser = argparse.ArgumentParser(description="Test Configuration Loading")
+    parser.add_argument("--config", help="Path to config file")
+    args = parser.parse_args()
+    
+    try:
+        print("Testing configuration loading...")
+        config = load_config(args.config)
+        
+        print("✅ Configuration loaded successfully")
+        print(f"Paths found: {list(config.get('paths', {}).keys())}")
+        print(f"VPN name: {config.get('vpn', {}).get('connection_name', 'Not set')}")
+        print(f"Notifications enabled: {config.get('notifications', {}).get('enabled', False)}")
+        
+        # Test path extraction
+        paths = get_paths(config)
+        criteria = get_filter_criteria(config)
+        
+        print("✅ All configuration validation passed")
+        
+    except Exception as e:
+        print(f"❌ Configuration test failed: {e}")
+        sys.exit(1)

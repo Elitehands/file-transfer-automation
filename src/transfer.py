@@ -184,3 +184,89 @@ def process_all_batches(batches: List[Dict[str, Any]],
         f"{summary['total_batches']} successful"
     )
     return summary
+
+
+if __name__ == "__main__":
+    """Test transfer functionality independently"""
+    import argparse
+    import sys
+    
+    #  import for standalone execution
+    try:
+        from src.settings import load_config, get_paths, get_filter_criteria
+    except ImportError:
+        sys.path.insert(0, str(Path(__file__).parent.parent))
+        from src.settings import load_config, get_paths, get_filter_criteria
+    
+    logging.basicConfig(level=logging.INFO, 
+                       format='%(asctime)s - %(levelname)s - %(message)s')
+    
+    parser = argparse.ArgumentParser(description="Test File Transfer Operations")
+    parser.add_argument("--config", help="Path to config file (default: config/settings.json)", 
+                       default="config/settings.json")
+    parser.add_argument("--verify-only", action="store_true", help="Only verify paths")
+    parser.add_argument("--read-excel-only", action="store_true", help="Only read Excel file")
+    parser.add_argument("--show-batches", action="store_true", help="Show found batch details")
+    args = parser.parse_args()
+    
+    try:
+        print(f"Loading configuration from: {args.config}")
+        config = load_config(args.config)
+        paths = get_paths(config)
+        criteria = get_filter_criteria(config)
+        
+        if args.verify_only:
+            print("Testing path verification...")
+            success = verify_paths(paths)
+            if success:
+                print("✅ All paths accessible:")
+                for name, path in paths.items():
+                    print(f"  {name}: {path}")
+            else:
+                print("❌ Some paths not accessible")
+            sys.exit(0 if success else 1)
+        
+        if args.read_excel_only:
+            print("Testing Excel file reading...")
+            batches = read_excel_batches(
+                paths["excel_file"],
+                criteria["initials_column"],
+                criteria["initials_value"],
+                criteria["release_status_column"]
+            )
+            print(f"✅ Found {len(batches)} unreleased batches")
+            
+            if args.show_batches and batches:
+                print("Batch details:")
+                for i, batch in enumerate(batches[:5]):  # Show first 5
+                    batch_id = get_batch_id(batch)
+                    print(f"  {i+1}. {batch_id}")
+            sys.exit(0)
+        
+        # Full test
+        print("Testing complete transfer workflow...")
+        print("1. Verifying paths...")
+        if not verify_paths(paths):
+            print("❌ Path verification failed")
+            sys.exit(1)
+        
+        print("2. Reading Excel file...")
+        batches = read_excel_batches(
+            paths["excel_file"],
+            criteria["initials_column"],
+            criteria["initials_value"],
+            criteria["release_status_column"]
+        )
+        
+        print(f"3. Found {len(batches)} batches to process")
+        if batches:
+            print("4. Processing batches...")
+            results = process_all_batches(batches, paths)
+            print(f"✅ Transfer complete: {results['successful_transfers']}/{results['total_batches']} successful")
+            print(f"   Total files copied: {results['total_files_copied']}")
+        else:
+            print("✅ No batches to process")
+        
+    except Exception as e:
+        print(f"❌ Transfer test failed: {e}")
+        sys.exit(1)

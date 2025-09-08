@@ -3,6 +3,8 @@
 import subprocess
 import logging
 import time
+import sys
+import argparse
 
 
 logger = logging.getLogger(__name__)
@@ -67,3 +69,30 @@ def connect_vpn(vpn_name: str) -> bool:
     except Exception as e:
         logger.error(f"Error connecting VPN: {e}")
         return False
+
+
+if __name__ == "__main__":
+    """Test VPN functionality independently"""
+    
+    logging.basicConfig(level=logging.INFO, 
+                       format='%(asctime)s - %(levelname)s - %(message)s')
+    
+    parser = argparse.ArgumentParser(description="Test VPN Connection")
+    parser.add_argument("--vpn-name", default="bbuk vpn", help="VPN connection name")
+    parser.add_argument("--test-mode", action="store_true", help="Simulate connection")
+    parser.add_argument("--check-only", action="store_true", help="Only check current status")
+    args = parser.parse_args()
+    
+    print(f"Testing VPN: '{args.vpn_name}'")
+    
+    if args.check_only:
+        connected = is_vpn_connected(args.vpn_name)
+        status = "✅ CONNECTED" if connected else "❌ NOT CONNECTED"
+        print(f"VPN Status: {status}")
+        sys.exit(0 if connected else 1)
+    
+    success = ensure_vpn_connection(args.vpn_name, args.test_mode)
+    
+    result = "✅ SUCCESS" if success else "❌ FAILED"
+    print(f"VPN Connection: {result}")
+    sys.exit(0 if success else 1)
