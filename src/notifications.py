@@ -21,18 +21,6 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-def test_smtp_connectivity(server: str, port: int) -> bool:
-    """Test basic connectivity to SMTP server"""
-    try:
-        sock = socket.create_connection((server, port), timeout=10)
-        sock.close()
-        logger.info(f"✅ SMTP connectivity test successful: {server}:{port}")
-        return True
-    except Exception as e:
-        logger.error(f"❌ SMTP connectivity test failed: {server}:{port} - {e}")
-        return False
-
-
 def send_completion_email(results: Dict[str, Any], config: Dict[str, Any]) -> bool:
     """Send completion notification email"""
     notifications = config.get("notifications", {})
@@ -98,23 +86,15 @@ def _send_email(subject: str, message: str, notifications: Dict[str, Any]) -> bo
             logger.warning("SMTP credentials not configured properly")
             return False
 
-        # Test connectivity first
-        if not test_smtp_connectivity(server_host, server_port):
-            logger.error("SMTP server not reachable")
-            return False
-
         msg = MIMEMultipart()
         msg["From"] = f"{sender_config.get('name', 'File Transfer System')} <{sender_config.get('email', username)}>"
         msg["To"] = ", ".join(recipients)
         msg["Subject"] = subject
         msg.attach(MIMEText(message, "plain"))
 
-        
         if server_port == 465:
-            # SSL connection
             server = smtplib.SMTP_SSL(server_host, server_port)
         else:
-            # TLS connection
             server = smtplib.SMTP(server_host, server_port)
             server.starttls()
 
@@ -139,28 +119,17 @@ if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description="Test Email Notifications")
     parser.add_argument("--config", default="test_settings.json", help="Config file path")
-    parser.add_argument("--connectivity-only", action="store_true", help="Test connectivity only")
     args = parser.parse_args()
     
     try:
         config = load_config(args.config)
-        smtp_config = config.get("notifications", {}).get("smtp", {})
-        
-        if args.connectivity_only:
-            # Just test connectivity
-            server_host = smtp_config.get("server", "smtp.gmail.com")
-            server_port = smtp_config.get("port", 587)
-            success = test_smtp_connectivity(server_host, server_port)
-        else:
-            # Test full email sending
-            results = {
-                "total_batches": 2,
-                "successful_transfers": 2,
-                "failed_transfers": 0,
-                "total_files_copied": 10
-            }
-            success = send_completion_email(results, config)
-        
+        results = {
+            "total_batches": 2,
+            "successful_transfers": 2,
+            "failed_transfers": 0,
+            "total_files_copied": 10
+        }
+        success = send_completion_email(results, config)
         logger.info(f"Email test: {'SUCCESS' if success else 'FAILED'}")
         
     except Exception as e:
