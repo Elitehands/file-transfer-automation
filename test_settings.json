@@ -1,6 +1,6 @@
 {
   "vpn": {
-    "connection_name": "",
+    "connection_name": " ",
     "max_retries": 3,
     "retry_delay": 5
   },
@@ -22,15 +22,15 @@
     "smtp": {
       "server": "smtp.gmail.com",
       "port": 465,
-      "username": "Jibolasherpad@gmail.com",
-      "password_hash": "ZGhhbnR5aXRhbXN6dG9qaw=="
+      "username": "${SMTP_USERNAME}",
+      "password_hash": "${SMTP_PASSWORD_HASH}"
     },
     "sender": {
-      "email": "Jibolasherpad@gmail.com",
+      "email": "${SMTP_USERNAME}",
       "name": "File Transfer Test System"
     },
     "recipients": [
-      "tobiwilliams003@gmail.com"
+      "Jibolasherpad@gmail.com"
     ]
   }
 }

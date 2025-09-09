@@ -5,10 +5,10 @@
     "retry_delay": 5
   },
   "paths": {
-    "remote_server": "Z:\\",
-    "excel_file": "Z:\\path\\to\\your\\excel\\file.xlsx",
-    "batch_documents": "Z:\\batch_documents",
-    "local_gdrive": "G:\\transferred_batches"
+    "remote_server": "Z:\\Quality Assurance(QA Common)",
+    "excel_file": "Z:\\Quality Assurance(QA Common)\\25.Product Status Log\\Product status Log.xlsx",
+    "batch_documents": "Z:\\Quality Assurance(QA Common)\\3.Batch Documents",
+    "local_gdrive": "G:\\My Drive\\status log"
   },
   "excel": {
     "filter_criteria": {
@@ -21,12 +21,12 @@
     "enabled": true,
     "smtp": {
       "server": "smtp.gmail.com",
-      "port": 587,
-      "username": "Jibolasherpad@gmail.com",
-      "password_hash": "ZGhhbiB0eWl0IGFtc3ogdG9qaw=="
+      "port": 465,
+      "username": "${SMTP_USERNAME}",
+      "password_hash": "${SMTP_PASSWORD_HASH}"
     },
     "sender": {
-      "email": "Jibolasherpad@gmail.com",
+      "email": "${SMTP_USERNAME}",
       "name": "File Transfer Automation"
     },
     "recipients": [
