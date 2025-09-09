@@ -1,66 +1,62 @@
-"""File Transfer Automation - Entry Point"""
+"""File Transfer Automation - Main Entry Point"""
+
 import sys
 import logging
 import argparse
 from datetime import datetime
 from pathlib import Path
-#  imports to work both as module and direct execution
-try:
-    # When run as: python -m src.main (from project root)
-    from src.vpn import ensure_vpn_connection
-    from src.notifications import send_completion_email
-    from src.settings import load_config, get_paths, get_filter_criteria
-    from src.transfer import verify_paths, read_excel_batches, process_all_batches
-except ImportError:
-    # When run as: python src/main.py (directly)
+
+if len(sys.argv) > 0 and sys.argv[0].endswith('main.py'):
     sys.path.insert(0, str(Path(__file__).parent.parent))
-    from src.vpn import ensure_vpn_connection
-    from src.notifications import send_completion_email
-    from src.settings import load_config, get_paths, get_filter_criteria
-    from src.transfer import verify_paths, read_excel_batches, process_all_batches
+
+from src.vpn import ensure_vpn_connection
+from src.notifications import send_completion_email
+from src.settings import load_config, get_paths, get_filter_criteria, verify_paths
+from src.transfer import read_excel_batches, process_all_batches
+
+logger = logging.getLogger(__name__)
 
 
-sys.path.insert(0, str(Path(__file__).parent))
-
-
-def setup_logging(level: str = "INFO") -> None:
-    """Setup simple logging"""
+def setup_logging():
+    """Configure logging for the application"""
     log_dir = Path("logs")
     log_dir.mkdir(exist_ok=True)
-
+    
+    log_file = log_dir / f"file_transfer_{datetime.now().strftime('%Y%m%d')}.log"
+    
     logging.basicConfig(
-        level=getattr(logging, level.upper()),
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[
-            logging.StreamHandler(),
-            logging.FileHandler(
-                log_dir / f"transfer_{datetime.now().strftime('%Y%m%d')}.log"
-            )
+            logging.FileHandler(log_file),
+            logging.StreamHandler()
         ]
     )
 
 
 def run_transfer_workflow(config: dict, test_mode: bool = False) -> bool:
     """Execute the complete file transfer workflow"""
-    logger = logging.getLogger(__name__)
-
     try:
         paths = get_paths(config)
         filter_criteria = get_filter_criteria(config)
         vpn_name = config.get("vpn", {}).get("connection_name", "")
 
+        # VPN connection check
         if vpn_name:
-            logger.info("Checking VPN connection...")
+            logger.info(f"Checking VPN connection: {vpn_name}")
             if not ensure_vpn_connection(vpn_name, test_mode=test_mode):
-                logger.error("VPN connection failed")
+                logger.error("VPN connection failed - stopping execution")
                 return False
+            logger.info("VPN connection verified")
 
-        logger.info("Verifying file system access...")
+        # Path verification
+        logger.info("Verifying paths accessibility")
         if not verify_paths(paths):
-            logger.error("File system access failed")
+            logger.error("Path verification failed")
             return False
 
-        logger.info("Reading Excel file for unreleased batches...")
+        # Excel processing
+        logger.info("Reading Excel file and filtering batches")
         batches = read_excel_batches(
             paths["excel_file"],
             filter_criteria["initials_column"],
@@ -69,63 +65,54 @@ def run_transfer_workflow(config: dict, test_mode: bool = False) -> bool:
         )
 
         if not batches:
-            logger.info("No unreleased batches found")
+            logger.info("No batches found for processing")
             return True
 
-        logger.info(f"Processing {len(batches)} batches...")
+        # Process batches
+        logger.info(f"Processing {len(batches)} batches")
         results = process_all_batches(batches, paths)
 
-        send_completion_email(results, config)
+        # Send notification
+        if config.get("notifications", {}).get("enabled", False):
+            logger.info("Sending completion notification")
+            send_completion_email(results, config)
 
+        # Log final results
         logger.info(
-            f"Transfer complete: {results['successful_transfers']}/"
-            f"{results['total_batches']} successful"
+            f"Workflow completed: {results['successful_transfers']}/{results['total_batches']} "
+            f"successful transfers, {results['total_files_copied']} files copied"
         )
-        logger.info(f"Total files transferred: {results['total_files_copied']}")
 
         return results["failed_transfers"] == 0
 
     except Exception as e:
-        logger.error(f"Workflow failed: {e}")
+        logger.error(f"Critical error in workflow: {e}")
         return False
 
 
-def main() -> int:
+def main():
     """Main entry point"""
+    setup_logging()
+    
     parser = argparse.ArgumentParser(description="File Transfer Automation")
-    parser.add_argument("--test-mode", action="store_true",
-                        help="Run in test mode")
-    parser.add_argument("--config", help="Path to config file")
-    parser.add_argument(
-        "--log-level",
-        default="INFO",
-        choices=["DEBUG", "INFO", "WARNING", "ERROR"]
-    )
+    parser.add_argument("--config", default="config/settings.json", help="Config file")
+    parser.add_argument("--test-mode", action="store_true", help="Test mode")
     args = parser.parse_args()
-
-    setup_logging(args.log_level)
-    logger = logging.getLogger(__name__)
 
     try:
         config = load_config(args.config)
-
-        if args.test_mode:
-            config.setdefault("system", {})["test_mode"] = True
-            logger.info("Running in TEST MODE")
-
-        start_time = datetime.now()
         success = run_transfer_workflow(config, test_mode=args.test_mode)
-        end_time = datetime.now()
-
-        duration = (end_time - start_time).total_seconds()
-        logger.info(f"Execution completed in {duration:.2f} seconds")
-
-        return 0 if success else 1
-
+        
+        if success:
+            logger.info("File transfer automation completed successfully")
+        else:
+            logger.error("File transfer automation failed")
+            sys.exit(1)
+            
     except Exception as e:
-        logger.error(f"Critical error: {e}")
-        return 1
+        logger.error(f"Application failed to start: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()
