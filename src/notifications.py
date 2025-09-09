@@ -1,24 +1,39 @@
-"""Email notifications for transfer results and QA"""
+"""Email notifications for transfer results"""
 
+import sys
 import smtplib
 import logging
-import os
-import sys
-import argparse
+import socket
 from pathlib import Path
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 from typing import Dict, Any
-from dotenv import load_dotenv
 
-load_dotenv()
+if __name__ == "__main__":
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+
+try:
+    from .settings import decode_password
+except ImportError:
+    from src.settings import decode_password
 
 logger = logging.getLogger(__name__)
 
 
-def send_completion_email(results: Dict[str, Any],
-                          config: Dict[str, Any]) -> bool:
+def test_smtp_connectivity(server: str, port: int) -> bool:
+    """Test basic connectivity to SMTP server"""
+    try:
+        sock = socket.create_connection((server, port), timeout=10)
+        sock.close()
+        logger.info(f"✅ SMTP connectivity test successful: {server}:{port}")
+        return True
+    except Exception as e:
+        logger.error(f"❌ SMTP connectivity test failed: {server}:{port} - {e}")
+        return False
+
+
+def send_completion_email(results: Dict[str, Any], config: Dict[str, Any]) -> bool:
     """Send completion notification email"""
     notifications = config.get("notifications", {})
 
@@ -32,7 +47,6 @@ def send_completion_email(results: Dict[str, Any],
             f"{results['total_batches']} Successful"
         )
         message = _format_email_message(results)
-
         return _send_email(subject, message, notifications)
 
     except Exception as e:
@@ -63,10 +77,10 @@ This is an automated message from File Transfer System.
     return message
 
 
-def _send_email(subject: str, message: str,
-                notifications: Dict[str, Any]) -> bool:
+def _send_email(subject: str, message: str, notifications: Dict[str, Any]) -> bool:
     """Send email using SMTP"""
     smtp_config = notifications.get("smtp", {})
+    sender_config = notifications.get("sender", {})
     recipients = notifications.get("recipients", [])
 
     if not recipients:
@@ -74,26 +88,36 @@ def _send_email(subject: str, message: str,
         return False
 
     try:
-        username = os.getenv("SMTP_USERNAME")
-        password = os.getenv("SMTP_PASSWORD")
+        username = smtp_config.get("username", "")
+        password_hash = smtp_config.get("password_hash", "")
+        password = decode_password(password_hash)
+        server_host = smtp_config.get("server", "smtp.gmail.com")
+        server_port = smtp_config.get("port", 587)
 
         if not username or not password:
-            logger.warning(
-                "SMTP credentials not found in environment variables"
-            )
+            logger.warning("SMTP credentials not configured properly")
+            return False
+
+        # Test connectivity first
+        if not test_smtp_connectivity(server_host, server_port):
+            logger.error("SMTP server not reachable")
             return False
 
         msg = MIMEMultipart()
-        msg["From"] = smtp_config.get("from_address", username)
+        msg["From"] = f"{sender_config.get('name', 'File Transfer System')} <{sender_config.get('email', username)}>"
         msg["To"] = ", ".join(recipients)
         msg["Subject"] = subject
         msg.attach(MIMEText(message, "plain"))
 
-        server = smtplib.SMTP(
-            smtp_config.get("server", "smtp.gmail.com"),
-            smtp_config.get("port", 587)
-        )
-        server.starttls()
+        
+        if server_port == 465:
+            # SSL connection
+            server = smtplib.SMTP_SSL(server_host, server_port)
+        else:
+            # TLS connection
+            server = smtplib.SMTP(server_host, server_port)
+            server.starttls()
+
         server.login(username, password)
         server.send_message(msg)
         server.quit()
@@ -106,124 +130,39 @@ def _send_email(subject: str, message: str,
         return False
 
 
-def test_email_notification():
-    """Test email sending with your Gmail account"""
-    print("Testing email notification...")
-
-    username = os.getenv("SMTP_USERNAME")
-    password = os.getenv("SMTP_PASSWORD")
-
-    if not username or not password:
-        print("❌ Set environment variables first:")
-        print("SMTP_USERNAME=Jibolasherpad@gmail.com")
-        print("SMTP_PASSWORD=your-app-password-here")
-        return False
-
-    config = {
-        "notifications": {
-            "enabled": True,
-            "smtp": {
-                "server": "smtp.gmail.com",
-                "port": 587,
-                "from_address": username
-            },
-            "recipients": [username]
-        }
-    }
-
-    results = {
-        "total_batches": 2,
-        "successful_transfers": 2,
-        "failed_transfers": 0,
-        "total_files_copied": 10
-    }
-
-    success = send_completion_email(results, config)
-    if success:
-        print("✅ Email test successful! Check your inbox.")
-    else:
-        print("❌ Email test failed. Check logs for details.")
-
-    return success
-
-
 if __name__ == "__main__":
-    """Test email functionality independently"""
+    import argparse
+    from src.settings import load_config
     
     logging.basicConfig(level=logging.INFO, 
                        format='%(asctime)s - %(levelname)s - %(message)s')
     
     parser = argparse.ArgumentParser(description="Test Email Notifications")
-    parser.add_argument("--config", help="Path to config file")
-    parser.add_argument("--test-smtp", action="store_true", help="Test SMTP with environment variables")
-    parser.add_argument("--check-env", action="store_true", help="Check environment variables")
+    parser.add_argument("--config", default="test_settings.json", help="Config file path")
+    parser.add_argument("--connectivity-only", action="store_true", help="Test connectivity only")
     args = parser.parse_args()
     
-    if args.check_env:
-        print("Checking environment variables...")
-        username = os.getenv("SMTP_USERNAME")
-        password = os.getenv("SMTP_PASSWORD")
+    try:
+        config = load_config(args.config)
+        smtp_config = config.get("notifications", {}).get("smtp", {})
         
-        print(f"SMTP_USERNAME: {'✅ Set' if username else '❌ Missing'}")
-        print(f"SMTP_PASSWORD: {'✅ Set' if password else '❌ Missing'}")
-        
-        if username:
-            print(f"Username: {username}")
-        
-        sys.exit(0 if (username and password) else 1)
-    
-    if args.test_smtp:
-        success = test_email_notification()
-        sys.exit(0 if success else 1)
-    
-    if args.config:
-        try:
-            # import for standalone execution
-            try:
-                from src.settings import load_config
-            except ImportError:
-                sys.path.insert(0, str(Path(__file__).parent.parent))
-                from src.settings import load_config
-            
-            print(f"Testing with config file: {args.config}")
-            config = load_config(args.config)
-            
-            notifications = config.get("notifications", {})
-            enabled = notifications.get("enabled", False)
-            recipients = notifications.get("recipients", [])
-            
-            print(f"Notifications enabled: {enabled}")
-            print(f"Recipients: {recipients}")
-            
-            if not enabled:
-                print("⚠️ Notifications are disabled in config")
-                sys.exit(0)
-            
-            # Mock results for testing
+        if args.connectivity_only:
+            # Just test connectivity
+            server_host = smtp_config.get("server", "smtp.gmail.com")
+            server_port = smtp_config.get("port", 587)
+            success = test_smtp_connectivity(server_host, server_port)
+        else:
+            # Test full email sending
             results = {
-                "total_batches": 3,
+                "total_batches": 2,
                 "successful_transfers": 2,
-                "failed_transfers": 1,
-                "total_files_copied": 15
+                "failed_transfers": 0,
+                "total_files_copied": 10
             }
-            
-            print("Sending test email with mock results...")
             success = send_completion_email(results, config)
-            result = "✅ SUCCESS" if success else "❌ FAILED"
-            print(f"Email Test: {result}")
-            sys.exit(0 if success else 1)
-            
-        except Exception as e:
-            print(f"❌ Email test failed: {e}")
-            sys.exit(1)
-    
-    # Default: show usage
-    print("Email notification testing options:")
-    print("  --check-env           Check environment variables")
-    print("  --test-smtp          Test SMTP with environment variables")
-    print("  --config FILE        Test with config file")
-    print()
-    print("Example usage:")
-    print("  python src/notifications.py --check-env")
-    print("  python src/notifications.py --test-smtp")
-    print("  python src/notifications.py --config mock_settings.json")
+        
+        logger.info(f"Email test: {'SUCCESS' if success else 'FAILED'}")
+        
+    except Exception as e:
+        logger.error(f"Email test failed: {e}")
+        sys.exit(1)

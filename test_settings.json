@@ -1,14 +1,14 @@
 {
   "vpn": {
-    "connection_name": "bbuk vpn",
+    "connection_name": "",
     "max_retries": 3,
     "retry_delay": 5
   },
   "paths": {
-    "remote_server": "Z:\\",
-    "excel_file": "Z:\\path\\to\\your\\excel\\file.xlsx",
-    "batch_documents": "Z:\\batch_documents",
-    "local_gdrive": "G:\\transferred_batches"
+    "remote_server": "mock_data",
+    "excel_file": "mock_data/Product_Status_Log_Test.xlsx",
+    "batch_documents": "mock_data/batch_documents",
+    "local_gdrive": "mock_data/gdrive"
   },
   "excel": {
     "filter_criteria": {
@@ -21,16 +21,16 @@
     "enabled": true,
     "smtp": {
       "server": "smtp.gmail.com",
-      "port": 587,
+      "port": 465,
       "username": "Jibolasherpad@gmail.com",
-      "password_hash": "ZGhhbiB0eWl0IGFtc3ogdG9qaw=="
+      "password_hash": "ZGhhbnR5aXRhbXN6dG9qaw=="
     },
     "sender": {
       "email": "Jibolasherpad@gmail.com",
-      "name": "File Transfer Automation"
+      "name": "File Transfer Test System"
     },
     "recipients": [
-      "Jibolasherpad@gmail.com"
+      "tobiwilliams003@gmail.com"
     ]
   }
 }
