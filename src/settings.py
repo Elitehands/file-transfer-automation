@@ -4,34 +4,33 @@ import os
 import sys
 import json
 import re
+import base64
+import logging
 from pathlib import Path
 from typing import Dict, Any
+
+logger = logging.getLogger(__name__)
 
 
 def load_config(config_path: str = None) -> Dict[str, Any]:
     """Load configuration with external file priority"""
     
-    # Handle PyInstaller bundled executable
     if getattr(sys, 'frozen', False):
-        # Running as compiled executable
-        bundle_dir = Path(sys._MEIPASS)  
-        external_dir = Path(sys.executable).parent  
+        bundle_dir = Path(sys._MEIPASS)
+        external_dir = Path(sys.executable).parent
     else:
-        
         bundle_dir = Path(__file__).parent.parent
         external_dir = Path.cwd()
     
     search_paths = [
         config_path if config_path else None,
-        # PRIORITY: External files first (can be edited by client)
-        external_dir / "settings.json",             # Next to exe
-        external_dir / "config" / "settings.json",  # In config folder next to exe
-        # FALLBACK: Internal bundled files
-        bundle_dir / "settings.json",              # Inside bundle
-        bundle_dir / "config" / "settings.json",   # Inside bundle
-        "config/settings.json",                    # Current working dir
-        "settings.json",                           # Current working dir
-        "mock_settings.json"                       # Development fallback
+        external_dir / "settings.json",
+        external_dir / "config" / "settings.json",
+        bundle_dir / "settings.json",
+        bundle_dir / "config" / "settings.json",
+        "config/settings.json",
+        "settings.json",
+        "test_settings.json"
     ]
 
     config = None
@@ -47,24 +46,8 @@ def load_config(config_path: str = None) -> Dict[str, Any]:
         available_paths = [str(p) for p in search_paths if p]
         raise FileNotFoundError(f"settings.json not found in: {available_paths}")
 
-    # Log which config was loaded
-    print(f"Config loaded from: {config_source}")
-
-    def substitute_env_vars(obj):
-        if isinstance(obj, str):
-            pattern = re.compile(r'\${([A-Za-z0-9_]+)}')
-
-            def replacer(match):
-                var_name = match.group(1)
-                return os.environ.get(var_name, "")
-            return pattern.sub(replacer, obj)
-        elif isinstance(obj, dict):
-            return {k: substitute_env_vars(v) for k, v in obj.items()}
-        elif isinstance(obj, list):
-            return [substitute_env_vars(item) for item in obj]
-        return obj
-
-    return substitute_env_vars(config)
+    logger.info(f"Config loaded from: {config_source}")
+    return config
 
 
 def get_paths(config: Dict[str, Any]) -> Dict[str, str]:
@@ -91,33 +74,28 @@ def get_filter_criteria(config: Dict[str, Any]) -> Dict[str, str]:
     return criteria
 
 
-if __name__ == "__main__":
-    """Test configuration loading independently"""
-    import argparse
-    import logging
-    
-    logging.basicConfig(level=logging.INFO, 
-                       format='%(asctime)s - %(levelname)s - %(message)s')
-    
-    parser = argparse.ArgumentParser(description="Test Configuration Loading")
-    parser.add_argument("--config", help="Path to config file")
-    args = parser.parse_args()
-    
+def verify_paths(paths: Dict[str, str]) -> bool:
+    """Verify all required paths are accessible"""
+    for name, path in paths.items():
+        if not Path(path).exists():
+            logger.error(f"Path not accessible: {name} = {path}")
+            return False
+
+    logger.info("All paths verified successfully")
+    return True
+
+
+def encode_password(password: str) -> str:
+    """Encode password with base64"""
+    return base64.b64encode(password.encode()).decode()
+
+
+def decode_password(password_hash: str) -> str:
+    """Decode base64 encoded password"""
+    if not password_hash:
+        return ""
     try:
-        print("Testing configuration loading...")
-        config = load_config(args.config)
-        
-        print("✅ Configuration loaded successfully")
-        print(f"Paths found: {list(config.get('paths', {}).keys())}")
-        print(f"VPN name: {config.get('vpn', {}).get('connection_name', 'Not set')}")
-        print(f"Notifications enabled: {config.get('notifications', {}).get('enabled', False)}")
-        
-        # Test path extraction
-        paths = get_paths(config)
-        criteria = get_filter_criteria(config)
-        
-        print("✅ All configuration validation passed")
-        
-    except Exception as e:
-        print(f"❌ Configuration test failed: {e}")
-        sys.exit(1)
+        return base64.b64decode(password_hash.encode()).decode()
+    except Exception:
+        logger.warning("Failed to decode password hash")
+        return ""
