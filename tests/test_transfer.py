@@ -2,7 +2,9 @@
 import pytest
 import tempfile
 from pathlib import Path
-from src.transfer import get_batch_id, verify_paths
+from src.transfer import get_batch_id  
+from src.settings import verify_paths
+
 
 def test_get_batch_id():
     """Test batch ID extraction"""

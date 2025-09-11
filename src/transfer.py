@@ -208,3 +208,34 @@ def find_batch_folder(batch_id: str, batch_docs_path: str) -> Optional[Path]:
             return folder
 
     return None
+
+
+if __name__ == "__main__":
+    import argparse
+    
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from src.settings import load_config, get_paths, get_filter_criteria
+    
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+    
+    parser = argparse.ArgumentParser(description="Test File Transfer")
+    parser.add_argument("--config", default="test_settings.json", help="Config file")
+    args = parser.parse_args()
+    
+    try:
+        config = load_config(args.config)
+        paths = get_paths(config)
+        criteria = get_filter_criteria(config)
+        excel_password = config.get("excel", {}).get("password", None)
+        
+        batches = read_excel_batches(
+            paths["excel_file"], criteria["initials_column"], 
+            criteria["initials_value"], criteria["release_status_column"],
+            excel_password
+        )
+        
+        logger.info(f"Transfer test: Found {len(batches)} batches")
+        
+    except Exception as e:
+        logger.error(f"Transfer test failed: {e}")
+        sys.exit(1)
