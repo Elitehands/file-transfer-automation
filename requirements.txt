@@ -13,3 +13,5 @@ python-dotenv>=1.0.0
 pyinstaller>=5.0.0
 
 colorlog>=6.0.0
+
+msoffcrypto-tool>=4.10.0
