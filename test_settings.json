@@ -6,15 +6,17 @@
   },
   "paths": {
     "remote_server": "mock_data",
-    "excel_file": "mock_data/Product_Status_Log_Test.xlsx",
+    "excel_file": "mock_data/Product_Status_Log.xlsb",
     "batch_documents": "mock_data/batch_documents",
     "local_gdrive": "mock_data/gdrive"
   },
   "excel": {
+    "password": "bbuk",
     "filter_criteria": {
       "initials_column": "AJ",
       "initials_value": "PP",
       "release_status_column": "AK"
+      
     }
   },
   "notifications": {
