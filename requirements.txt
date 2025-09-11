@@ -12,5 +12,4 @@ python-dotenv>=1.0.0
 # Build .exe
 pyinstaller>=5.0.0
 
-# Optional: For enhanced logging
 colorlog>=6.0.0
