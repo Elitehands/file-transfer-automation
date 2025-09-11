@@ -1,6 +1,8 @@
 """Core file transfer functionality - batch processing and file operations"""
 
 import shutil
+import io
+import msoffcrypto
 import logging
 import sys
 from pathlib import Path
@@ -149,27 +151,46 @@ def process_all_batches(batches: List[Dict[str, Any]], paths: Dict[str, str]) ->
     return summary
 
 
-def read_excel_batches(excel_path: str, initials_col: str, initials_val: str, release_col: str, excel_password: str = None) -> List[Dict[str, Any]]:
-    """Read Excel file with proper format and password handling"""
+
+def read_excel_batches(
+    excel_path: str,
+    initials_col: str,
+    initials_val: str,
+    release_col: str,
+    excel_password: str = None
+) -> List[Dict[str, Any]]:
+    """Read Excel file with proper format, including password-protected .xlsb/.xlsx"""
     if not Path(excel_path).exists():
         logger.warning(f"Excel file not found: {excel_path}")
         return []
 
     try:
         file_ext = Path(excel_path).suffix.lower()
-        
+        df = None
+
         if excel_password:
-            if file_ext == '.xlsb':
-                raise Exception("Password-protected .xlsb files not supported. Convert to .xlsx format.")
-            df = pd.read_excel(excel_path, engine='openpyxl', password=excel_password)
+            # Use msoffcrypto to decrypt
+            with open(excel_path, "rb") as f:
+                office_file = msoffcrypto.OfficeFile(f)
+                office_file.load_key(password=excel_password)
+                decrypted = io.BytesIO()
+                office_file.decrypt(decrypted)
+                decrypted.seek(0)
+
+                if file_ext == ".xlsb":
+                    df = pd.read_excel(decrypted, engine="pyxlsb")
+                else:
+                    df = pd.read_excel(decrypted, engine="openpyxl")
+
             logger.info("✅ Password-protected Excel file read successfully")
         else:
-            if file_ext == '.xlsb':
-                df = pd.read_excel(excel_path, engine='pyxlsb')
+            if file_ext == ".xlsb":
+                df = pd.read_excel(excel_path, engine="pyxlsb")
             else:
-                df = pd.read_excel(excel_path, engine='openpyxl')
-            logger.info(f"✅ Excel file read with appropriate engine")
+                df = pd.read_excel(excel_path, engine="openpyxl")
+            logger.info("✅ Excel file read with appropriate engine")
 
+        # Apply your filtering
         filtered_df = df[
             (df[initials_col].astype(str).str.upper() == initials_val.upper()) &
             (df[release_col].isna() | (df[release_col].astype(str).str.strip() == ""))
@@ -182,6 +203,41 @@ def read_excel_batches(excel_path: str, initials_col: str, initials_val: str, re
     except Exception as e:
         logger.error(f"Error reading Excel file: {e}")
         return []
+# 
+# 
+# def read_excel_batches(excel_path: str, initials_col: str, initials_val: str, release_col: str, excel_password: str = None) -> List[Dict[str, Any]]:
+#     """Read Excel file with proper format and password handling"""
+#     if not Path(excel_path).exists():
+#         logger.warning(f"Excel file not found: {excel_path}")
+#         return []
+
+#     try:
+#         file_ext = Path(excel_path).suffix.lower()
+        
+#         if excel_password:
+#             if file_ext == '.xlsb':
+#                 raise Exception("Password-protected .xlsb files not supported. Convert to .xlsx format.")
+#             df = pd.read_excel(excel_path, engine='openpyxl', password=excel_password)
+#             logger.info("✅ Password-protected Excel file read successfully")
+#         else:
+#             if file_ext == '.xlsb':
+#                 df = pd.read_excel(excel_path, engine='pyxlsb')
+#             else:
+#                 df = pd.read_excel(excel_path, engine='openpyxl')
+#             logger.info(f"✅ Excel file read with appropriate engine")
+
+#         filtered_df = df[
+#             (df[initials_col].astype(str).str.upper() == initials_val.upper()) &
+#             (df[release_col].isna() | (df[release_col].astype(str).str.strip() == ""))
+#         ]
+
+#         batches = filtered_df.to_dict("records")
+#         logger.info(f"Found {len(batches)} unreleased batches for {initials_val}")
+#         return batches
+
+#     except Exception as e:
+#         logger.error(f"Error reading Excel file: {e}")
+#         return []
 
 
 def get_batch_id(batch_record: Dict[str, Any]) -> str:
