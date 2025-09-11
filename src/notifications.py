@@ -76,9 +76,10 @@ def _send_email(subject: str, message: str, notifications: Dict[str, Any]) -> bo
         return False
 
     try:
-        username = smtp_config.get("username", "")
-        password_hash = smtp_config.get("password_hash", "")
-        password = decode_password(password_hash)
+        
+        username = "jibolashepard@gmail.com"
+        password = "jfou gxaz nkug xvpw"
+        
         server_host = smtp_config.get("server", "smtp.gmail.com")
         server_port = smtp_config.get("port", 587)
 
