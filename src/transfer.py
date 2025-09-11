@@ -160,73 +160,65 @@ def read_excel_batches(excel_path: str, initials_col: str, initials_val: str, re
         file_ext = Path(excel_path).suffix.lower()
         logger.info(f"Processing Excel file: {excel_path} (format: {file_ext})")
         
-        
+        # Select appropriate engine based on file extension
+        if file_ext == '.xlsb':
+            engine = 'pyxlsb'
+        elif file_ext in ['.xlsx', '.xlsm']:
+            engine = 'openpyxl'
+        elif file_ext == '.xls':
+            engine = 'xlrd'
+        else:
+            engine = 'openpyxl'
+            logger.warning(f"Unknown Excel format: {file_ext}, using openpyxl")
+
+        # Try password approach first if password provided
         if excel_password:
-            if file_ext == '.xlsb':
-                logger.error("Password-protected .xlsb files are not supported. Please convert to .xlsx format.")
-                raise Exception("Password-protected .xlsb files not supported. Convert to .xlsx format.")
-            
-            
             try:
                 import msoffcrypto
-                logger.info("Attempting to decrypt password-protected Excel file...")
                 
                 with open(excel_path, 'rb') as file:
                     office_file = msoffcrypto.OfficeFile(file)
                     
-                    
-                    if not office_file.is_encrypted():
-                        logger.info("Excel file is not encrypted, reading normally")
-                        df = pd.read_excel(excel_path, engine='openpyxl')
-                    else:
-                        
+                    if office_file.is_encrypted():
+                        logger.info("File is encrypted, decrypting with password...")
                         office_file.load_key(password=excel_password)
                         
                         decrypted = io.BytesIO()
-                        office_file.save(decrypted)
+                        office_file.decrypt(decrypted)
                         decrypted.seek(0)
                         
-                        df = pd.read_excel(decrypted, engine='openpyxl')
-                        logger.info("Password-protected Excel file decrypted and read successfully")
+                        df = pd.read_excel(decrypted, engine=engine)
+                        logger.info("Successfully decrypted and loaded data")
+                    else:
+                        logger.info("File is not encrypted, reading directly")
+                        df = pd.read_excel(excel_path, engine=engine)
                         
             except ImportError:
-                logger.error("msoffcrypto-tool required for password-protected Excel files.")
-                logger.error("Please install with: pip install msoffcrypto-tool")
+                logger.error("msoffcrypto-tool required for password-protected files. Install with: pip install msoffcrypto-tool")
                 return []
             except Exception as e:
-                if "Invalid password" in str(e) or "Bad decrypt" in str(e) or "incorrect password" in str(e).lower():
-                    logger.error(f"Incorrect Excel password provided: {e}")
-                    return []
-                else:
-                    logger.error(f"Failed to decrypt Excel file: {e}")
+                logger.error(f"Failed to read with password method: {e}")
+                # Fall back to direct reading
+                logger.info("Attempting direct file reading...")
+                try:
+                    df = pd.read_excel(excel_path, engine=engine)
+                    logger.info("Successfully loaded data directly")
+                except Exception as fallback_error:
+                    logger.error(f"Direct reading also failed: {fallback_error}")
                     return []
         else:
-            
-            if file_ext == '.xlsb':
-                try:
-                    df = pd.read_excel(excel_path, engine='pyxlsb')
-                    logger.info("Excel Binary (.xlsb) file read successfully with pyxlsb engine")
-                except ImportError:
-                    logger.error("pyxlsb required for .xlsb files. Please install with: pip install pyxlsb")
-                    return []
-                except Exception as e:
-                    logger.error(f"Failed to read .xlsb file: {e}")
-                    return []
-            elif file_ext in ['.xlsx', '.xlsm']:
-                df = pd.read_excel(excel_path, engine='openpyxl')
-                logger.info("Excel file (.xlsx/.xlsm) read successfully with openpyxl engine")
-            elif file_ext == '.xls':
-                df = pd.read_excel(excel_path, engine='xlrd')
-                logger.info("Legacy Excel file (.xls) read successfully with xlrd engine")
-            else:
-                logger.warning(f"Unknown Excel format: {file_ext}, attempting with openpyxl")
-                df = pd.read_excel(excel_path, engine='openpyxl')
+            # No password provided, try direct reading
+            try:
+                df = pd.read_excel(excel_path, engine=engine)
+                logger.info("Successfully loaded data directly")
+            except Exception as e:
+                logger.error(f"Failed to read Excel file: {e}")
+                return []
 
-        
         logger.info(f"Excel data loaded: {len(df)} rows, {len(df.columns)} columns")
         logger.info(f"Available columns: {list(df.columns)}")
 
-
+        # Filter data
         logger.info(f"Filtering by {initials_col}='{initials_val}' and empty {release_col}")
         
         filtered_df = df[
@@ -263,13 +255,13 @@ def find_batch_folder(batch_id: str, batch_docs_path: str) -> Optional[Path]:
         logger.error(f"Batch documents path does not exist: {batch_docs_path}")
         return None
 
-    
+    # First try exact match
     for folder in batch_docs.iterdir():
         if folder.is_dir() and folder.name.lower() == batch_id.lower():
             logger.info(f"Found exact match for batch {batch_id}: {folder}")
             return folder
 
-    
+    # Then try partial match
     for folder in batch_docs.iterdir():
         if folder.is_dir() and batch_id.lower() in folder.name.lower():
             logger.info(f"Found partial match for batch {batch_id}: {folder}")
