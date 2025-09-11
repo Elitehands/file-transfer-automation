@@ -56,7 +56,7 @@ mock_data/
 test_files/
 temp/
 
-# Secrets (never commit these)
+# Secrets 
 .env
 *password*
 *secret*
