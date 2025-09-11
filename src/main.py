@@ -6,8 +6,7 @@ import argparse
 from datetime import datetime
 from pathlib import Path
 
-if len(sys.argv) > 0 and sys.argv[0].endswith('main.py'):
-    sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.vpn import ensure_vpn_connection
 from src.notifications import send_completion_email
@@ -39,9 +38,9 @@ def run_transfer_workflow(config: dict, test_mode: bool = False) -> bool:
     try:
         paths = get_paths(config)
         filter_criteria = get_filter_criteria(config)
+        excel_password = config.get("excel", {}).get("password", None) 
         vpn_name = config.get("vpn", {}).get("connection_name", "")
 
-        # VPN connection check
         if vpn_name:
             logger.info(f"Checking VPN connection: {vpn_name}")
             if not ensure_vpn_connection(vpn_name, test_mode=test_mode):
@@ -49,35 +48,31 @@ def run_transfer_workflow(config: dict, test_mode: bool = False) -> bool:
                 return False
             logger.info("VPN connection verified")
 
-        # Path verification
         logger.info("Verifying paths accessibility")
         if not verify_paths(paths):
             logger.error("Path verification failed")
             return False
 
-        # Excel processing
         logger.info("Reading Excel file and filtering batches")
         batches = read_excel_batches(
             paths["excel_file"],
             filter_criteria["initials_column"],
             filter_criteria["initials_value"],
-            filter_criteria["release_status_column"]
+            filter_criteria["release_status_column"],
+            excel_password 
         )
 
         if not batches:
             logger.info("No batches found for processing")
             return True
 
-        # Process batches
         logger.info(f"Processing {len(batches)} batches")
         results = process_all_batches(batches, paths)
 
-        # Send notification
         if config.get("notifications", {}).get("enabled", False):
             logger.info("Sending completion notification")
             send_completion_email(results, config)
 
-        # Log final results
         logger.info(
             f"Workflow completed: {results['successful_transfers']}/{results['total_batches']} "
             f"successful transfers, {results['total_files_copied']} files copied"
