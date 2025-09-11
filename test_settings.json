@@ -21,16 +21,15 @@
     "enabled": true,
     "smtp": {
       "server": "smtp.gmail.com",
-      "port": 465,
-      "username": "${SMTP_USERNAME}",
-      "password_hash": "${SMTP_PASSWORD_HASH}"
+      "port": 587
     },
     "sender": {
-      "email": "${SMTP_USERNAME}",
       "name": "File Transfer Test System"
     },
     "recipients": [
-      "Jibolasherpad@gmail.com"
+      "tobiwilliams003@gmail.com",
+      "nwlevels@gmail.com"
+      
     ]
   }
 }
