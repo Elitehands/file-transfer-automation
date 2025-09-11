@@ -39,14 +39,17 @@ def ensure_vpn_connection(vpn_name: str, test_mode: bool = False) -> bool:
 def is_vpn_connected(vpn_name: str) -> bool:
     """Check if VPN is connected using PowerShell"""
     try:
-        cmd = f'powershell.exe "Get-VpnConnection -Name \'{vpn_name}\'"'
+        cmd = f'powershell.exe -NoProfile -Command "(Get-VpnConnection -Name \\"{vpn_name}\\" -ErrorAction SilentlyContinue).ConnectionStatus"'
+       #cmd = f'powershell.exe "Get-VpnConnection -Name \'{vpn_name}\'"'
         result = subprocess.run(cmd, capture_output=True, text=True, shell=True, timeout=10)
 
         if result.returncode != 0:
             logger.debug(f"VPN status check failed: {result.stderr}")
             return False
+        
+        return result.stdout.strip().lower() == "connected"
 
-        return "ConnectionStatus : Connected" in result.stdout
+        #return "ConnectionStatus : Connected" in result.stdout
 
     except Exception as e:
         logger.error(f"Error checking VPN connection: {e}")
