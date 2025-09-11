@@ -12,11 +12,11 @@ logger = logging.getLogger(__name__)
 def is_vpn_connected(vpn_name: str) -> bool:
     """Check if VPN connection is active"""
     try:
-        cmd = f'powershell.exe "Get-VpnConnection -Name \'{vpn_name}\'"'
+        cmd = f'powershell.exe -NoProfile -Command "(Get-VpnConnection -Name \\"{vpn_name}\\" -ErrorAction SilentlyContinue).ConnectionStatus"'
         result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=10)
         
         if result.returncode == 0:
-            return "Connected" in result.stdout
+            return result.stdout.strip().lower() == "connected"
         return False
         
     except Exception as e:
