@@ -4,12 +4,74 @@ import shutil
 import logging
 import sys
 import io
+import re
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Set
 import pandas as pd
 
 logger = logging.getLogger(__name__)
+
+
+def copy_excel_status_log(source_excel_path: str, dest_gdrive_path: str) -> str:
+    """Copy Excel status log from shared drive to Google Drive first"""
+    source_path = Path(source_excel_path)
+    if not source_path.exists():
+        logger.error(f"Excel file not found at source: {source_excel_path}")
+        return source_excel_path
+    
+    dest_folder = Path(dest_gdrive_path)
+    dest_folder.mkdir(parents=True, exist_ok=True)
+    
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    dest_file = dest_folder / f"Product_status_Log_{timestamp}.xlsx"
+    
+    try:
+        shutil.copy2(source_path, dest_file)
+        logger.info(f"Excel status log copied to: {dest_file}")
+        return str(dest_file)
+    except Exception as e:
+        logger.error(f"Failed to copy Excel status log: {e}")
+        return source_excel_path
+
+
+def get_processed_batches_from_logs() -> Set[str]:
+    """Extract previously processed batch IDs from log files"""
+    processed_batches = set()
+    log_dir = Path("logs")
+    
+    if not log_dir.exists():
+        return processed_batches
+    
+    pattern = re.compile(r"Successfully processed batch ([^:]+):")
+    
+    for log_file in log_dir.glob("file_transfer_*.log"):
+        try:
+            with open(log_file, 'r') as f:
+                for line in f:
+                    match = pattern.search(line)
+                    if match:
+                        processed_batches.add(match.group(1).strip())
+        except Exception as e:
+            logger.warning(f"Could not read log file {log_file}: {e}")
+    
+    logger.info(f"Found {len(processed_batches)} previously processed batches in logs")
+    return processed_batches
+
+
+def filter_new_batches(batches: List[Dict[str, Any]], processed_batches: Set[str]) -> List[Dict[str, Any]]:
+    """Filter out already processed batches"""
+    if not processed_batches:
+        return batches
+    
+    new_batches = []
+    for batch in batches:
+        batch_id = get_batch_id(batch)
+        if batch_id not in processed_batches:
+            new_batches.append(batch)
+    
+    logger.info(f"Filtered to {len(new_batches)} new batches (from {len(batches)} total)")
+    return new_batches
 
 
 def count_source_files(source_folder: Path) -> int:
@@ -110,18 +172,43 @@ def process_single_batch(batch_id: str, paths: Dict[str, str]) -> Dict[str, Any]
 
 def process_all_batches(batches: List[Dict[str, Any]], paths: Dict[str, str]) -> Dict[str, Any]:
     """Process all batches and return detailed summary with file counts"""
+    # Copy Excel status log first
+    if "excel_file" in paths:
+        copy_excel_status_log(paths["excel_file"], paths["local_gdrive"])
+    
+    # Get previously processed batches
+    processed_batches = get_processed_batches_from_logs()
+    
+    # Filter to only new batches
+    new_batches = filter_new_batches(batches, processed_batches)
+    
+    if not new_batches:
+        logger.info("No new batches to process")
+        return {
+            "total_batches": len(batches),
+            "successful_transfers": 0,
+            "failed_transfers": 0,
+            "partial_transfers": 0,
+            "total_files_copied": 0,
+            "total_source_files": 0,
+            "overall_success_rate": 100.0,
+            "batch_details": [],
+            "skipped_batches": len(batches)
+        }
+
     summary = {
-        "total_batches": len(batches),
+        "total_batches": len(new_batches),
         "successful_transfers": 0,
         "failed_transfers": 0,
         "partial_transfers": 0,
         "total_files_copied": 0,
         "total_source_files": 0,
         "overall_success_rate": 0.0,
-        "batch_details": []
+        "batch_details": [],
+        "skipped_batches": len(batches) - len(new_batches)
     }
 
-    for batch in batches:
+    for batch in new_batches:
         batch_id = get_batch_id(batch)
         result = process_single_batch(batch_id, paths)
 
@@ -143,7 +230,8 @@ def process_all_batches(batches: List[Dict[str, Any]], paths: Dict[str, str]) ->
         f"Batch processing complete: "
         f"{summary['successful_transfers']} successful, "
         f"{summary['partial_transfers']} partial, "
-        f"{summary['failed_transfers']} failed | "
+        f"{summary['failed_transfers']} failed, "
+        f"{summary['skipped_batches']} skipped | "
         f"Files: {summary['total_files_copied']}/{summary['total_source_files']} "
         f"({summary['overall_success_rate']:.1f}% success rate)"
     )
