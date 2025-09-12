@@ -13,26 +13,24 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 
-def copy_excel_status_log(source_excel_path: str, dest_gdrive_path: str) -> str:
+def copy_excel_status_log(source_excel_path: Path, dest_gdrive_path: Path) -> str:
     """Copy Excel status log from shared drive to Google Drive first"""
-    source_path = Path(source_excel_path)
-    if not source_path.exists():
+    if not source_excel_path.exists():
         logger.error(f"Excel file not found at source: {source_excel_path}")
-        return source_excel_path
+        return str(source_excel_path)
     
-    dest_folder = Path(dest_gdrive_path)
-    dest_folder.mkdir(parents=True, exist_ok=True)
+    dest_gdrive_path.mkdir(parents=True, exist_ok=True)
     
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    dest_file = dest_folder / f"Product_status_Log_{timestamp}.xlsx"
+    dest_file = dest_gdrive_path / f"Product_status_Log_{timestamp}.xlsx"
     
     try:
-        shutil.copy2(source_path, dest_file)
+        shutil.copy2(source_excel_path, dest_file)
         logger.info(f"Excel status log copied to: {dest_file}")
         return str(dest_file)
     except Exception as e:
         logger.error(f"Failed to copy Excel status log: {e}")
-        return source_excel_path
+        return str(source_excel_path)
 
 
 def get_processed_batches_from_logs() -> Set[str]:
@@ -61,9 +59,6 @@ def get_processed_batches_from_logs() -> Set[str]:
 
 def filter_new_batches(batches: List[Dict[str, Any]], processed_batches: Set[str]) -> List[Dict[str, Any]]:
     """Filter out already processed batches"""
-    if not processed_batches:
-        return batches
-    
     new_batches = []
     for batch in batches:
         batch_id = get_batch_id(batch)
@@ -74,38 +69,32 @@ def filter_new_batches(batches: List[Dict[str, Any]], processed_batches: Set[str
     return new_batches
 
 
-def count_source_files(source_folder: Path) -> int:
-    """Count total files in source folder"""
-    if not source_folder.exists():
-        return 0
-    return len([f for f in source_folder.glob("**/*") if f.is_file()])
-
-
 def copy_batch_files(source_folder: Path, dest_folder: Path) -> Dict[str, Any]:
     """Copy all files from source to destination with detailed counting"""
     result = {"files_copied": 0, "source_file_count": 0, "errors": []}
     
-    result["source_file_count"] = count_source_files(source_folder)
+    if not source_folder.exists():
+        logger.warning(f"Source folder does not exist: {source_folder}")
+        return result
+
+    
+    source_files = [f for f in source_folder.glob("**/*") if f.is_file()]
+    result["source_file_count"] = len(source_files)
     
     if result["source_file_count"] == 0:
         logger.warning(f"No files found in source folder: {source_folder}")
         return result
 
     dest_folder.mkdir(parents=True, exist_ok=True)
-    source_files = [f for f in source_folder.glob("**/*") if f.is_file()]
-
     logger.info(f"Found {result['source_file_count']} files to copy from {source_folder}")
 
     for source_file in source_files:
         try:
             rel_path = source_file.relative_to(source_folder)
             dest_file = dest_folder / rel_path
-
             dest_file.parent.mkdir(parents=True, exist_ok=True)
-
             shutil.copy2(source_file, dest_file)
             result["files_copied"] += 1
-
         except Exception as e:
             error_msg = f"Failed to copy {source_file.name}: {e}"
             result["errors"].append(error_msg)
@@ -172,30 +161,15 @@ def process_single_batch(batch_id: str, paths: Dict[str, str]) -> Dict[str, Any]
 
 def process_all_batches(batches: List[Dict[str, Any]], paths: Dict[str, str]) -> Dict[str, Any]:
     """Process all batches and return detailed summary with file counts"""
-    # Copy Excel status log first
+    
     if "excel_file" in paths:
-        copy_excel_status_log(paths["excel_file"], paths["local_gdrive"])
+        copy_excel_status_log(Path(paths["excel_file"]), Path(paths["local_gdrive"]))
     
-    # Get previously processed batches
+    
     processed_batches = get_processed_batches_from_logs()
-    
-    # Filter to only new batches
     new_batches = filter_new_batches(batches, processed_batches)
     
-    if not new_batches:
-        logger.info("No new batches to process")
-        return {
-            "total_batches": len(batches),
-            "successful_transfers": 0,
-            "failed_transfers": 0,
-            "partial_transfers": 0,
-            "total_files_copied": 0,
-            "total_source_files": 0,
-            "overall_success_rate": 100.0,
-            "batch_details": [],
-            "skipped_batches": len(batches)
-        }
-
+    
     summary = {
         "total_batches": len(new_batches),
         "successful_transfers": 0,
@@ -207,7 +181,14 @@ def process_all_batches(batches: List[Dict[str, Any]], paths: Dict[str, str]) ->
         "batch_details": [],
         "skipped_batches": len(batches) - len(new_batches)
     }
+    
+    
+    if not new_batches:
+        logger.info("No new batches to process")
+        summary["overall_success_rate"] = 100.0
+        return summary
 
+    
     for batch in new_batches:
         batch_id = get_batch_id(batch)
         result = process_single_batch(batch_id, paths)
@@ -222,6 +203,7 @@ def process_all_batches(batches: List[Dict[str, Any]], paths: Dict[str, str]) ->
             summary["partial_transfers"] += 1
         else:
             summary["failed_transfers"] += 1
+    
     
     if summary["total_source_files"] > 0:
         summary["overall_success_rate"] = (summary["total_files_copied"] / summary["total_source_files"]) * 100
@@ -240,12 +222,15 @@ def process_all_batches(batches: List[Dict[str, Any]], paths: Dict[str, str]) ->
 
 def read_excel_batches(excel_path: str, initials_col: str, initials_val: str, release_col: str, excel_password: str = None) -> List[Dict[str, Any]]:
     """Read Excel file with proper format and password handling"""
-    if not Path(excel_path).exists():
+    
+    excel_file = Path(excel_path)
+    
+    if not excel_file.exists():
         logger.warning(f"Excel file not found: {excel_path}")
         return []
 
     try:
-        file_ext = Path(excel_path).suffix.lower()
+        file_ext = excel_file.suffix.lower()
         logger.info(f"Processing Excel file: {excel_path} (format: {file_ext})")
         
         # Select appropriate engine based on file extension
@@ -264,7 +249,7 @@ def read_excel_batches(excel_path: str, initials_col: str, initials_val: str, re
             try:
                 import msoffcrypto
                 
-                with open(excel_path, 'rb') as file:
+                with open(excel_file, 'rb') as file:
                     office_file = msoffcrypto.OfficeFile(file)
                     
                     if office_file.is_encrypted():
@@ -279,7 +264,7 @@ def read_excel_batches(excel_path: str, initials_col: str, initials_val: str, re
                         logger.info("Successfully decrypted and loaded data")
                     else:
                         logger.info("File is not encrypted, reading directly")
-                        df = pd.read_excel(excel_path, engine=engine)
+                        df = pd.read_excel(excel_file, engine=engine)
                         
             except ImportError:
                 logger.error("msoffcrypto-tool required for password-protected files. Install with: pip install msoffcrypto-tool")
@@ -289,7 +274,7 @@ def read_excel_batches(excel_path: str, initials_col: str, initials_val: str, re
                 # Fall back to direct reading
                 logger.info("Attempting direct file reading...")
                 try:
-                    df = pd.read_excel(excel_path, engine=engine)
+                    df = pd.read_excel(excel_file, engine=engine)
                     logger.info("Successfully loaded data directly")
                 except Exception as fallback_error:
                     logger.error(f"Direct reading also failed: {fallback_error}")
@@ -297,7 +282,7 @@ def read_excel_batches(excel_path: str, initials_col: str, initials_val: str, re
         else:
             # No password provided, try direct reading
             try:
-                df = pd.read_excel(excel_path, engine=engine)
+                df = pd.read_excel(excel_file, engine=engine)
                 logger.info("Successfully loaded data directly")
             except Exception as e:
                 logger.error(f"Failed to read Excel file: {e}")
