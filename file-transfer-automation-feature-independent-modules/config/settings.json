@@ -1,0 +1,36 @@
+{
+  "vpn": {
+    "connection_name": "bbuk vpn",
+    "max_retries": 3,
+    "retry_delay": 5
+  },
+   "paths": {
+    "remote_server": "\\\\10.100.1.22\\data\\Quality Assurance(QA Common)",
+    "excel_file": "\\\\10.100.1.22\\data\\Quality Assurance(QA Common)\\25.Product Status Log\\Product status Log.xlsb",
+    "batch_documents": "\\\\10.100.1.22\\data\\Quality Assurance(QA Common)\\3.Batch Documents",
+    "local_gdrive": "G:\\My Drive\\status log"
+  },
+  "excel": {
+    "filter_criteria": {
+      "initials_column": "QP name",
+      "initials_value": "PP",
+      "release_status_column": "QP released date"
+    }
+  },
+  "notifications": {
+    "enabled": true,
+    "smtp": {
+      "server": "smtp.gmail.com",
+      "port": 465,
+      "username": "${SMTP_USERNAME}",
+      "password_hash": "${SMTP_PASSWORD_HASH}"
+    },
+    "sender": {
+      "email": "${SMTP_USERNAME}",
+      "name": "File Transfer Automation"
+    },
+    "recipients": [
+      "Jibolasherpad@gmail.com"
+    ]
+  }
+}

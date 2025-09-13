@@ -1,0 +1,17 @@
+# Core dependencies
+pandas>=1.5.0
+openpyxl>=3.0.0
+pyxlsb>=1.0.8
+
+# Development and testing
+pytest>=7.0.0
+pytest-cov>=4.0.0
+flake8>=5.0.0
+python-dotenv>=1.0.0
+
+# Build .exe
+pyinstaller>=5.0.0
+
+colorlog>=6.0.0
+
+msoffcrypto-tool>=4.10.0

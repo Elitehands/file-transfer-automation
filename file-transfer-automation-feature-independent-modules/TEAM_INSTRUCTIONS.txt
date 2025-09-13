@@ -1,0 +1,50 @@
+File Transfer Automation - Team Testing Instructions
+
+MOCK VERSION TESTING (Works on any Windows PC):
+1. Run: file_transfer_automation_mock.exe --config=mock_settings.json --test-mode
+2. Check created folders: mock_data/gdrive/ 
+3. Check logs: logs/ folder
+
+PRODUCTION VERSION (Needs client environment):
+1. Edit config/settings.json with real paths
+2. Create .env file with SMTP credentials
+3. Run: file_transfer_automation_prod.exe --config=config/settings.json
+
+GMAIL SETUP (For notifications):
+- Enable 2FA on Gmail account
+- Generate App Password: Google Account > Security > App passwords
+- Update .env file with app password
+
+3. What's Pending
+✅ Completed:
+Core system working end-to-end
+Mock and production executables built
+All tests passing (8/8)
+Configuration management
+Logging and error handling
+
+Still Pending:
+QA Notification Logic - What triggers QA notifications? (Need clarification)
+Production Excel File Path - Team needs to update config/settings.json with real path
+Gmail App Password - Team member needs to generate for notifications
+Client Environment Testing - Deploy on actual client system
+
+4. Things to Note
+For Client Deployment:
+System needs Windows with VPN client installed
+Mapped drives Z: (remote server) and G: (Google Drive) must exist
+Excel file must be accessible and writable
+Task Scheduler setup requires admin rights
+
+For Team:
+Mock version is fully functional for testing/demo
+Production version needs environment-specific configuration
+All code is production-ready, just needs final config updates
+
+Key Success Indicators:
+Mock exe runs without errors 
+Transfers files and creates logs 
+Email system configured (pending app password)
+Windows scheduling ready (XML provided)
+Ready for client demo with mock version. 
+Production deployment just needs final configuration updates from @DAniel.
