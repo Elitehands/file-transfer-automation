@@ -9,6 +9,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Any, Optional, Set
 import pandas as pd
+from collections import deque
 
 logger = logging.getLogger(__name__)
 
@@ -316,6 +317,10 @@ def read_excel_batches(excel_path: str, initials_col: str, initials_val: str, re
 
         batches = filtered_df.to_dict("records")
         logger.info(f"Found {len(batches)} unreleased batches for {initials_val}")
+        product = batches[0].get("Product")
+        strength = batches[0].get("Strength")
+        # batch_id = batches[0].get("Batch ID")
+        print(f"Sample batch details - Product: {product}, Strength: {strength}")  # , Batch ID: {batch_id}
         
         if len(batches) > 0:
             logger.info(f"Sample batch IDs: {[get_batch_id(b) for b in batches[:3]]}")
@@ -335,28 +340,107 @@ def get_batch_id(batch_record: Dict[str, Any]) -> str:
             return str(batch_record[col]).strip()
     return "Unknown"
 
+# ----------------------------------------------------------------------------------------------------------#
 
-def find_batch_folder(batch_id: str, batch_docs_path: str) -> Optional[Path]:
-    """Find source folder for batch ID"""
-    batch_docs = Path(batch_docs_path)
-    if not batch_docs.exists():
+def find_batch_folder(batch_id: str, batch_docs_path: str, max_depth: int = 2, exact_only: bool = False) -> Optional[Path]:
+    """
+    Find the batch folder by scanning up to `max_depth` levels deep.
+    Optimized for shared/network drives (avoids full recursive walk).
+
+    - exact_only=True: only return a folder whose name == batch_id
+    - exact_only=False: prefer exact match; fall back to partial (name contains batch_id)
+    """
+    root = Path(batch_docs_path)
+    if not root.exists():
         logger.error(f"Batch documents path does not exist: {batch_docs_path}")
         return None
 
-    # First try exact match
-    for folder in batch_docs.iterdir():
-        if folder.is_dir() and folder.name.lower() == batch_id.lower():
-            logger.info(f"Found exact match for batch {batch_id}: {folder}")
-            return folder
+    logger.info(f"Scanning up to depth {max_depth} for '{batch_id}' under '{batch_docs_path}'")
 
-    # Then try partial match
-    for folder in batch_docs.iterdir():
-        if folder.is_dir() and batch_id.lower() in folder.name.lower():
-            logger.info(f"Found partial match for batch {batch_id}: {folder}")
-            return folder
+    # BFS queue: (path, depth)
+    q = deque([(root, 0)])
 
-    logger.warning(f"No folder found for batch ID: {batch_id}")
+    while q:
+        current, depth = q.popleft()
+
+        # Only scan directories
+        try:
+            with os.scandir(current) as it:
+                for entry in it:
+                    if not entry.is_dir(follow_symlinks=False):
+                        continue
+
+                    name = entry.name
+
+                    # Exact match first
+                    if name == batch_id:
+                        logger.info(f"Found exact match for batch {batch_id}: {entry.path}")
+                        return Path(entry.path)
+
+                    # Partial match if allowed
+                    if not exact_only and batch_id in name:
+                        logger.info(f"Found partial match for batch {batch_id}: {entry.path}")
+                        return Path(entry.path)
+
+                    # Go deeper if we haven't reached max_depth
+                    if depth < max_depth:
+                        q.append((Path(entry.path), depth + 1))
+
+        except PermissionError:
+            logger.debug(f"Permission denied: {current}")
+        except FileNotFoundError:
+            logger.debug(f"Path disappeared during scan: {current}")
+        except OSError as e:
+            logger.debug(f"OSError scanning {current}: {e}")
+
+    logger.warning(f"No folder found for batch ID: {batch_id} (searched to depth {max_depth})")
     return None
+
+# def find_batch_folder(batch_id: str, batch_docs_path: str) -> Optional[Path]:
+#     """
+#     Find source folder for batch ID by recursively searching the directory.
+#     """
+#     batch_docs = Path(batch_docs_path)
+#     if not batch_docs.exists():
+#         logger.error(f"Batch documents path does not exist: {batch_docs_path}")
+#         return None
+
+#     logger.info(f"Recursively searching for folder with batch ID '{batch_id}' in '{batch_docs_path}'")
+
+#     # Use a recursive glob search for folders
+#     for folder in batch_docs.rglob(f"*{batch_id}*"):
+#         if folder.is_dir():
+#             # Now check for exact and partial matches as before
+#             if folder.name.lower() == batch_id.lower():
+#                 logger.info(f"Found exact match for batch {batch_id}: {folder}")
+#                 return folder
+#             elif batch_id.lower() in folder.name.lower():
+#                 logger.info(f"Found partial match for batch {batch_id}: {folder}")
+#                 return folder
+
+#     logger.warning(f"No folder found for batch ID: {batch_id}")
+#     return None
+# def find_batch_folder(batch_id: str, batch_docs_path: str) -> Optional[Path]:
+#     """Find source folder for batch ID"""
+#     batch_docs = Path(batch_docs_path)
+#     if not batch_docs.exists():
+#         logger.error(f"Batch documents path does not exist: {batch_docs_path}")
+#         return None
+
+#     # First try exact match
+#     for folder in batch_docs.iterdir():
+#         if folder.is_dir() and folder.name.lower() == batch_id.lower():
+#             logger.info(f"Found exact match for batch {batch_id}: {folder}")
+#             return folder
+
+#     # Then try partial match
+#     for folder in batch_docs.iterdir():
+#         if folder.is_dir() and batch_id.lower() in folder.name.lower():
+#             logger.info(f"Found partial match for batch {batch_id}: {folder}")
+#             return folder
+
+#     logger.warning(f"No folder found for batch ID: {batch_id}")
+#     return None
 
 
 if __name__ == "__main__":
