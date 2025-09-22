@@ -24,9 +24,10 @@ def test_successful_workflow(mock_verify, mock_excel, mock_process):
             "batch_documents": "/test", "local_gdrive": "/test"
         },
         "excel": {
-            "filter_criteria": {
+        "filter_criteria": {
                 "initials_column": "AJ", "initials_value": "PP", 
-                "release_status_column": "AK"
+                "release_status_column": "AK",
+                "release_quantity_column": "AL"
             }
         }
     }
