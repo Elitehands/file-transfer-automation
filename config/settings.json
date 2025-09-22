@@ -11,10 +11,12 @@
     "local_gdrive": "G:\\My Drive\\status log"
   },
   "excel": {
+    "password": "${EXCEL_PASSWORD}",
     "filter_criteria": {
       "initials_column": "AJ",
       "initials_value": "PP",
-      "release_status_column": "AK"
+      "release_status_column": "AK",
+      "release_quantity_column": "AL"
     }
   },
   "notifications": {
@@ -23,7 +25,7 @@
       "server": "smtp.gmail.com",
       "port": 465,
       "username": "${SMTP_USERNAME}",
-      "password_hash": "${SMTP_PASSWORD_HASH}"
+      "password": "${SMTP_PASSWORD}"
     },
     "sender": {
       "email": "${SMTP_USERNAME}",
@@ -31,6 +33,10 @@
     },
     "recipients": [
       "Jibolasherpad@gmail.com"
+    ],
+    "qa_recipients": [
+      "aneta.jell@company.com",
+      "paul.palmer@company.com"
     ]
   }
 }
