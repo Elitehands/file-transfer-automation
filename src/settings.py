@@ -9,7 +9,6 @@ import logging
 from pathlib import Path
 from typing import Dict, Any
 
-
 try:
     from dotenv import load_dotenv
     load_dotenv()
@@ -87,7 +86,7 @@ def get_paths(config: Dict[str, Any]) -> Dict[str, str]:
 def get_filter_criteria(config: Dict[str, Any]) -> Dict[str, str]:
     """Extract Excel filter criteria from config"""
     criteria = config.get("excel", {}).get("filter_criteria", {})
-    required = ["initials_column", "initials_value", "release_status_column"]
+    required = ["initials_column", "initials_value", "release_status_column", "release_quantity_column"]  
 
     for key in required:
         if not criteria.get(key):
