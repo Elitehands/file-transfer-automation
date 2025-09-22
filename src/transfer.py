@@ -126,14 +126,14 @@ def copy_batch_files(source_folder: Path, dest_folder: Path) -> Dict[str, Any]:
 def process_single_batch(batch_id: str, paths: Dict[str, str]) -> Dict[str, Any]:
     """Process files for a single batch with detailed file counting"""
     result = {
-    "batch_id": batch_id,
-    "success": False,
-    "files_copied": 0,
-    "source_file_count": 0,
-    "copy_success_rate": 0.0,
-    "errors": [],
-    "qa_checklist_present": False  #
-}
+        "batch_id": batch_id,
+        "success": False,
+        "files_copied": 0,
+        "source_file_count": 0,
+        "copy_success_rate": 0.0,
+        "errors": [],
+        "qa_checklist_present": False  #
+    }
 
     try:
         source_folder = find_batch_folder(batch_id, paths["batch_documents"])
@@ -162,7 +162,7 @@ def process_single_batch(batch_id: str, paths: Dict[str, str]) -> Dict[str, Any]
         
         result["success"] = result["files_copied"] > 0 and result["copy_success_rate"] == 100.0
 
-                if result["success"]:
+        if result["success"]:
             status_suffix = " (QA Ready)" if has_qa else ""
             logger.info(
                 f"Successfully processed batch {batch_id}{status_suffix}: "
@@ -237,7 +237,7 @@ def process_all_batches(batches: List[Dict[str, Any]], paths: Dict[str, str]) ->
         else:
             summary["failed_transfers"] += 1
     
-        if summary["total_source_files"] > 0:
+    if summary["total_source_files"] > 0:
         summary["overall_success_rate"] = (summary["total_files_copied"] / summary["total_source_files"]) * 100
 
     try:
