@@ -141,8 +141,16 @@ def process_single_batch(batch_id: str, paths: Dict[str, str]) -> Dict[str, Any]
             result["errors"].append(f"Source folder not found for {batch_id}")
             return result
 
+        has_qa = has_qa_checklist(source_folder)
+        result["qa_checklist_present"] = has_qa
+
         timestamp = datetime.now().strftime("%Y%m%d")
-        dest_folder = Path(paths["local_gdrive"]) / f"{batch_id}_{timestamp}"
+        if has_qa:
+            dest_folder_name = f"{batch_id}_{timestamp}_ready_to_review"
+        else:
+            dest_folder_name = f"{batch_id}_{timestamp}"
+        
+        dest_folder = Path(paths["local_gdrive"]) / dest_folder_name
 
         copy_result = copy_batch_files(source_folder, dest_folder)
         result["files_copied"] = copy_result["files_copied"]
@@ -154,9 +162,10 @@ def process_single_batch(batch_id: str, paths: Dict[str, str]) -> Dict[str, Any]
         
         result["success"] = result["files_copied"] > 0 and result["copy_success_rate"] == 100.0
 
-        if result["success"]:
+                if result["success"]:
+            status_suffix = " (QA Ready)" if has_qa else ""
             logger.info(
-                f"Successfully processed batch {batch_id}: "
+                f"Successfully processed batch {batch_id}{status_suffix}: "
                 f"{result['files_copied']}/{result['source_file_count']} files "
                 f"({result['copy_success_rate']:.1f}% success rate)"
             )
@@ -228,8 +237,13 @@ def process_all_batches(batches: List[Dict[str, Any]], paths: Dict[str, str]) ->
         else:
             summary["failed_transfers"] += 1
     
-    if summary["total_source_files"] > 0:
+        if summary["total_source_files"] > 0:
         summary["overall_success_rate"] = (summary["total_files_copied"] / summary["total_source_files"]) * 100
+
+    try:
+        send_qa_notifications(summary["batch_details"], {"notifications": {"qa_recipients": ["aneta.jell@company.com", "paul.palmer@company.com"]}, "paths": paths})
+    except Exception as e:
+        logger.error(f"Failed to send QA notifications: {e}")
 
     logger.info(
         f"Batch processing complete: "
