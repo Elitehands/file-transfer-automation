@@ -1,5 +1,6 @@
 """Core file transfer functionality - batch processing and file operations"""
 
+import os
 import shutil
 import logging
 import sys
@@ -9,28 +10,33 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Any, Optional, Set
 import pandas as pd
+from collections import deque
 
 logger = logging.getLogger(__name__)
 
 
-def copy_excel_status_log(source_excel_path: Path, dest_gdrive_path: Path) -> str:
+def copy_excel_status_log(source_excel_path: str, dest_gdrive_path: str) -> str:
     """Copy Excel status log from shared drive to Google Drive first"""
-    if not source_excel_path.exists():
+    source_path = Path(source_excel_path)
+    if not source_path.exists():
         logger.error(f"Excel file not found at source: {source_excel_path}")
-        return str(source_excel_path)
+        return source_excel_path
     
-    dest_gdrive_path.mkdir(parents=True, exist_ok=True)
+    dest_folder = Path(dest_gdrive_path)
+    dest_folder.mkdir(parents=True, exist_ok=True)
     
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    dest_file = dest_gdrive_path / f"Product_status_Log_{timestamp}.xlsx"
+    
+    original_extension = source_path.suffix  
+    dest_file = dest_folder / f"Product_status_Log_{timestamp}{original_extension}"
     
     try:
-        shutil.copy2(source_excel_path, dest_file)
+        shutil.copy2(source_path, dest_file)
         logger.info(f"Excel status log copied to: {dest_file}")
         return str(dest_file)
     except Exception as e:
         logger.error(f"Failed to copy Excel status log: {e}")
-        return str(source_excel_path)
+        return source_excel_path
 
 
 def get_processed_batches_from_logs() -> Set[str]:
@@ -59,6 +65,9 @@ def get_processed_batches_from_logs() -> Set[str]:
 
 def filter_new_batches(batches: List[Dict[str, Any]], processed_batches: Set[str]) -> List[Dict[str, Any]]:
     """Filter out already processed batches"""
+    if not processed_batches:
+        return batches
+    
     new_batches = []
     for batch in batches:
         batch_id = get_batch_id(batch)
@@ -69,32 +78,38 @@ def filter_new_batches(batches: List[Dict[str, Any]], processed_batches: Set[str
     return new_batches
 
 
+def count_source_files(source_folder: Path) -> int:
+    """Count total files in source folder"""
+    if not source_folder.exists():
+        return 0
+    return len([f for f in source_folder.glob("**/*") if f.is_file()])
+
+
 def copy_batch_files(source_folder: Path, dest_folder: Path) -> Dict[str, Any]:
     """Copy all files from source to destination with detailed counting"""
     result = {"files_copied": 0, "source_file_count": 0, "errors": []}
     
-    if not source_folder.exists():
-        logger.warning(f"Source folder does not exist: {source_folder}")
-        return result
-
-    
-    source_files = [f for f in source_folder.glob("**/*") if f.is_file()]
-    result["source_file_count"] = len(source_files)
+    result["source_file_count"] = count_source_files(source_folder)
     
     if result["source_file_count"] == 0:
         logger.warning(f"No files found in source folder: {source_folder}")
         return result
 
     dest_folder.mkdir(parents=True, exist_ok=True)
+    source_files = [f for f in source_folder.glob("**/*") if f.is_file()]
+
     logger.info(f"Found {result['source_file_count']} files to copy from {source_folder}")
 
     for source_file in source_files:
         try:
             rel_path = source_file.relative_to(source_folder)
             dest_file = dest_folder / rel_path
+
             dest_file.parent.mkdir(parents=True, exist_ok=True)
+
             shutil.copy2(source_file, dest_file)
             result["files_copied"] += 1
+
         except Exception as e:
             error_msg = f"Failed to copy {source_file.name}: {e}"
             result["errors"].append(error_msg)
@@ -111,13 +126,14 @@ def copy_batch_files(source_folder: Path, dest_folder: Path) -> Dict[str, Any]:
 def process_single_batch(batch_id: str, paths: Dict[str, str]) -> Dict[str, Any]:
     """Process files for a single batch with detailed file counting"""
     result = {
-        "batch_id": batch_id,
-        "success": False,
-        "files_copied": 0,
-        "source_file_count": 0,
-        "copy_success_rate": 0.0,
-        "errors": []
-    }
+    "batch_id": batch_id,
+    "success": False,
+    "files_copied": 0,
+    "source_file_count": 0,
+    "copy_success_rate": 0.0,
+    "errors": [],
+    "qa_checklist_present": False  #
+}
 
     try:
         source_folder = find_batch_folder(batch_id, paths["batch_documents"])
@@ -161,15 +177,30 @@ def process_single_batch(batch_id: str, paths: Dict[str, str]) -> Dict[str, Any]
 
 def process_all_batches(batches: List[Dict[str, Any]], paths: Dict[str, str]) -> Dict[str, Any]:
     """Process all batches and return detailed summary with file counts"""
-    
+    # Copy Excel status log first
     if "excel_file" in paths:
-        copy_excel_status_log(Path(paths["excel_file"]), Path(paths["local_gdrive"]))
+        copy_excel_status_log(paths["excel_file"], paths["local_gdrive"])
     
-    
+    # Get previously processed batches
     processed_batches = get_processed_batches_from_logs()
+    
+    # Filter to only new batches
     new_batches = filter_new_batches(batches, processed_batches)
     
-    
+    if not new_batches:
+        logger.info("No new batches to process")
+        return {
+            "total_batches": len(batches),
+            "successful_transfers": 0,
+            "failed_transfers": 0,
+            "partial_transfers": 0,
+            "total_files_copied": 0,
+            "total_source_files": 0,
+            "overall_success_rate": 100.0,
+            "batch_details": [],
+            "skipped_batches": len(batches)
+        }
+
     summary = {
         "total_batches": len(new_batches),
         "successful_transfers": 0,
@@ -181,14 +212,7 @@ def process_all_batches(batches: List[Dict[str, Any]], paths: Dict[str, str]) ->
         "batch_details": [],
         "skipped_batches": len(batches) - len(new_batches)
     }
-    
-    
-    if not new_batches:
-        logger.info("No new batches to process")
-        summary["overall_success_rate"] = 100.0
-        return summary
 
-    
     for batch in new_batches:
         batch_id = get_batch_id(batch)
         result = process_single_batch(batch_id, paths)
@@ -203,7 +227,6 @@ def process_all_batches(batches: List[Dict[str, Any]], paths: Dict[str, str]) ->
             summary["partial_transfers"] += 1
         else:
             summary["failed_transfers"] += 1
-    
     
     if summary["total_source_files"] > 0:
         summary["overall_success_rate"] = (summary["total_files_copied"] / summary["total_source_files"]) * 100
@@ -220,20 +243,16 @@ def process_all_batches(batches: List[Dict[str, Any]], paths: Dict[str, str]) ->
     return summary
 
 
-def read_excel_batches(excel_path: str, initials_col: str, initials_val: str, release_col: str, excel_password: str = None) -> List[Dict[str, Any]]:
+def read_excel_batches(excel_path: str, initials_col: str, initials_val: str, release_col: str, release_qty_col: str, excel_password: str = None) -> List[Dict[str, Any]]:
     """Read Excel file with proper format and password handling"""
-    
-    excel_file = Path(excel_path)
-    
-    if not excel_file.exists():
+    if not Path(excel_path).exists():
         logger.warning(f"Excel file not found: {excel_path}")
         return []
 
     try:
-        file_ext = excel_file.suffix.lower()
+        file_ext = Path(excel_path).suffix.lower()
         logger.info(f"Processing Excel file: {excel_path} (format: {file_ext})")
         
-        # Select appropriate engine based on file extension
         if file_ext == '.xlsb':
             engine = 'pyxlsb'
         elif file_ext in ['.xlsx', '.xlsm']:
@@ -244,12 +263,11 @@ def read_excel_batches(excel_path: str, initials_col: str, initials_val: str, re
             engine = 'openpyxl'
             logger.warning(f"Unknown Excel format: {file_ext}, using openpyxl")
 
-        # Try password approach first if password provided
         if excel_password:
             try:
                 import msoffcrypto
                 
-                with open(excel_file, 'rb') as file:
+                with open(excel_path, 'rb') as file:
                     office_file = msoffcrypto.OfficeFile(file)
                     
                     if office_file.is_encrypted():
@@ -264,25 +282,23 @@ def read_excel_batches(excel_path: str, initials_col: str, initials_val: str, re
                         logger.info("Successfully decrypted and loaded data")
                     else:
                         logger.info("File is not encrypted, reading directly")
-                        df = pd.read_excel(excel_file, engine=engine)
+                        df = pd.read_excel(excel_path, engine=engine)
                         
             except ImportError:
                 logger.error("msoffcrypto-tool required for password-protected files. Install with: pip install msoffcrypto-tool")
                 return []
             except Exception as e:
                 logger.error(f"Failed to read with password method: {e}")
-                # Fall back to direct reading
                 logger.info("Attempting direct file reading...")
                 try:
-                    df = pd.read_excel(excel_file, engine=engine)
+                    df = pd.read_excel(excel_path, engine=engine)
                     logger.info("Successfully loaded data directly")
                 except Exception as fallback_error:
                     logger.error(f"Direct reading also failed: {fallback_error}")
                     return []
         else:
-            # No password provided, try direct reading
             try:
-                df = pd.read_excel(excel_file, engine=engine)
+                df = pd.read_excel(excel_path, engine=engine)
                 logger.info("Successfully loaded data directly")
             except Exception as e:
                 logger.error(f"Failed to read Excel file: {e}")
@@ -291,58 +307,155 @@ def read_excel_batches(excel_path: str, initials_col: str, initials_val: str, re
         logger.info(f"Excel data loaded: {len(df)} rows, {len(df.columns)} columns")
         logger.info(f"Available columns: {list(df.columns)}")
 
-        # Filter data
-        logger.info(f"Filtering by {initials_col}='{initials_val}' and empty {release_col}")
+        logger.info(f"Filtering by {initials_col}='{initials_val}', empty {release_col}, and empty {release_qty_col}")
         
         filtered_df = df[
             (df[initials_col].astype(str).str.upper() == initials_val.upper()) &
-            (df[release_col].isna() | (df[release_col].astype(str).str.strip() == ""))
+            (df[release_col].isna() | (df[release_col].astype(str).str.strip() == "")) &
+            (df[release_qty_col].isna() | (df[release_qty_col].astype(str).str.strip() == ""))
         ]
 
         batches = filtered_df.to_dict("records")
         logger.info(f"Found {len(batches)} unreleased batches for {initials_val}")
         
         if len(batches) > 0:
-            logger.info(f"Sample batch IDs: {[get_batch_id(b) for b in batches[:3]]}")
+            product = batches[0].get("Product")
+            strength = batches[0].get("Strength")
+            print(f"Sample batch details - Product: {product}, Strength: {strength}")
         
         return batches
 
     except Exception as e:
-        logger.error(f"Error reading Excel file: {e}")
+        logger.error(f"Error processing Excel file: {e}")
         return []
 
 
 def get_batch_id(batch_record: Dict[str, Any]) -> str:
     """Extract batch ID from record"""
-    possible_columns = ["Batch ID", "BatchID", "Batch_ID", "ID", "batch_id"]
+    possible_columns = ["Batch ID", "BatchID", "Batch_ID", "ID", "batch_id", "B.No"]
     for col in possible_columns:
         if col in batch_record and batch_record[col]:
             return str(batch_record[col]).strip()
     return "Unknown"
 
 
-def find_batch_folder(batch_id: str, batch_docs_path: str) -> Optional[Path]:
-    """Find source folder for batch ID"""
-    batch_docs = Path(batch_docs_path)
-    if not batch_docs.exists():
+def find_batch_folder(batch_id: str, batch_docs_path: str, max_depth: int = 3, exact_only: bool = False) -> Optional[Path]:
+    """
+    Find the batch folder by scanning up to `max_depth` levels deep.
+    Optimized for shared/network drives (avoids full recursive walk).
+
+    - exact_only=True: only return a folder whose name == batch_id
+    - exact_only=False: prefer exact match; fall back to partial (name contains batch_id)
+    """
+    root = Path(batch_docs_path)
+    if not root.exists():
         logger.error(f"Batch documents path does not exist: {batch_docs_path}")
         return None
 
-    # First try exact match
-    for folder in batch_docs.iterdir():
-        if folder.is_dir() and folder.name.lower() == batch_id.lower():
-            logger.info(f"Found exact match for batch {batch_id}: {folder}")
-            return folder
+    logger.info(f"Scanning up to depth {max_depth} for '{batch_id}' under '{batch_docs_path}'")
 
-    # Then try partial match
-    for folder in batch_docs.iterdir():
-        if folder.is_dir() and batch_id.lower() in folder.name.lower():
-            logger.info(f"Found partial match for batch {batch_id}: {folder}")
-            return folder
+    # BFS queue: (path, depth)
+    q = deque([(root, 0)])
 
-    logger.warning(f"No folder found for batch ID: {batch_id}")
+    while q:
+        current, depth = q.popleft()
+
+        # Only scan directories
+        try:
+            with os.scandir(current) as it:
+                for entry in it:
+                    if not entry.is_dir(follow_symlinks=False):
+                        continue
+
+                    name = entry.name
+
+                    # Exact match first
+                    if name == batch_id:
+                        logger.info(f"Found exact match for batch {batch_id}: {entry.path}")
+                        return Path(entry.path)
+
+                    # Partial match if allowed
+                    if not exact_only and batch_id in name:
+                        logger.info(f"Found partial match for batch {batch_id}: {entry.path}")
+                        return Path(entry.path)
+
+                    # Go deeper if we haven't reached max_depth
+                    if depth < max_depth:
+                        q.append((Path(entry.path), depth + 1))
+
+        except PermissionError:
+            logger.debug(f"Permission denied: {current}")
+        except FileNotFoundError:
+            logger.debug(f"Path disappeared during scan: {current}")
+        except OSError as e:
+            logger.debug(f"OSError scanning {current}: {e}")
+
+    logger.warning(f"No folder found for batch ID: {batch_id} (searched to depth {max_depth})")
     return None
 
+
+
+def has_qa_checklist(batch_folder: Path) -> bool:
+    """Check if batch folder contains QA checklist files"""
+    try:
+        qa_patterns = [
+            "*QA*Batch*Review*Checklist*",
+            "*qa*checklist*",
+            "*QA*checklist*"
+        ]
+        
+        for pattern in qa_patterns:
+            if list(batch_folder.glob(pattern)):
+                logger.info(f"QA checklist found in {batch_folder}")
+                return True
+        return False
+    except Exception as e:
+        logger.warning(f"Error checking QA checklist in {batch_folder}: {e}")
+        return False
+
+
+def send_qa_notifications(batch_results: List[Dict[str, Any]], config: Dict[str, Any]) -> None:
+    """Send QA notifications for batches ready to review"""
+    try:
+        qa_ready_batches = [b for b in batch_results if b.get("qa_checklist_present", False)]
+        
+        if not qa_ready_batches:
+            logger.info("No QA ready batches to notify about")
+            return
+        
+        notifications = config.get("notifications", {})
+        qa_recipients = notifications.get("qa_recipients", [])
+        
+        if not qa_recipients:
+            logger.warning("No QA recipients configured")
+            return
+        
+        subject = f"QA Review Ready - {len(qa_ready_batches)} Batches Available"
+        batch_list = "\n".join([f"- {b['batch_id']}" for b in qa_ready_batches])
+        
+        message = f"""QA Batch Review Notification
+
+The following batches are ready for QA review:
+
+{batch_list}
+
+Location: {config['paths']['local_gdrive']}
+
+Please review at your earliest convenience.
+
+Regards,
+File Transfer Automation System
+"""
+        
+        from .notifications import _send_email
+        qa_notifications = notifications.copy()
+        qa_notifications["recipients"] = qa_recipients
+        
+        _send_email(subject, message, qa_notifications)
+        logger.info(f"QA notification sent to {len(qa_recipients)} recipients")
+        
+    except Exception as e:
+        logger.error(f"Failed to send QA notifications: {e}")
 
 if __name__ == "__main__":
     import argparse
@@ -363,8 +476,11 @@ if __name__ == "__main__":
         excel_password = config.get("excel", {}).get("password", None)
         
         batches = read_excel_batches(
-            paths["excel_file"], criteria["initials_column"], 
-            criteria["initials_value"], criteria["release_status_column"],
+            paths["excel_file"], 
+            criteria["initials_column"], 
+            criteria["initials_value"], 
+            criteria["release_status_column"],
+            criteria["release_quantity_column"],
             excel_password
         )
         
