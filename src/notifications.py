@@ -3,20 +3,11 @@
 import sys
 import smtplib
 import logging
-import socket
 from pathlib import Path
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 from typing import Dict, Any
-
-if __name__ == "__main__":
-    sys.path.insert(0, str(Path(__file__).parent.parent))
-
-try:
-    from .settings import decode_password
-except ImportError:
-    from src.settings import decode_password
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +67,6 @@ def _send_email(subject: str, message: str, notifications: Dict[str, Any]) -> bo
         return False
 
     try:
-        
         username = smtp_config.get("username")
         password = smtp_config.get("password")
         
