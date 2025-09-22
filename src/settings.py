@@ -4,7 +4,6 @@ import os
 import sys
 import json
 import re
-import base64
 import logging
 from pathlib import Path
 from typing import Dict, Any
@@ -104,19 +103,3 @@ def verify_paths(paths: Dict[str, str]) -> bool:
 
     logger.info("All paths verified successfully")
     return True
-
-
-def encode_password(password: str) -> str:
-    """Encode password with base64"""
-    return base64.b64encode(password.encode()).decode()
-
-
-def decode_password(password_hash: str) -> str:
-    """Decode base64 encoded password"""
-    if not password_hash:
-        return ""
-    try:
-        return base64.b64decode(password_hash.encode()).decode()
-    except Exception:
-        logger.warning("Failed to decode password hash")
-        return ""
