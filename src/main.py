@@ -59,6 +59,7 @@ def run_transfer_workflow(config: dict, test_mode: bool = False) -> bool:
             filter_criteria["initials_column"],
             filter_criteria["initials_value"],
             filter_criteria["release_status_column"],
+            filter_criteria["release_quantity_column"],
             excel_password 
         )
 
