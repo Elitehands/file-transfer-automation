@@ -132,7 +132,7 @@ def process_single_batch(batch_id: str, paths: Dict[str, str]) -> Dict[str, Any]
         "source_file_count": 0,
         "copy_success_rate": 0.0,
         "errors": [],
-        "qa_checklist_present": False  #
+        "qa_checklist_present": False
     }
 
     try:
@@ -184,7 +184,7 @@ def process_single_batch(batch_id: str, paths: Dict[str, str]) -> Dict[str, Any]
         return result
 
 
-def process_all_batches(batches: List[Dict[str, Any]], paths: Dict[str, str]) -> Dict[str, Any]:
+def process_all_batches(batches: List[Dict[str, Any]], paths: Dict[str, str], config: Dict[str, Any]) -> Dict[str, Any]:
     """Process all batches and return detailed summary with file counts"""
     # Copy Excel status log first
     if "excel_file" in paths:
@@ -241,7 +241,7 @@ def process_all_batches(batches: List[Dict[str, Any]], paths: Dict[str, str]) ->
         summary["overall_success_rate"] = (summary["total_files_copied"] / summary["total_source_files"]) * 100
 
     try:
-        send_qa_notifications(summary["batch_details"], {"notifications": {"qa_recipients": ["aneta.jell@company.com", "paul.palmer@company.com"]}, "paths": paths})
+        send_qa_notifications(summary["batch_details"], config)
     except Exception as e:
         logger.error(f"Failed to send QA notifications: {e}")
 
@@ -257,7 +257,7 @@ def process_all_batches(batches: List[Dict[str, Any]], paths: Dict[str, str]) ->
     return summary
 
 
-def read_excel_batches(excel_path: str, initials_col: str, initials_val: str, release_col: str, release_qty_col: str, excel_password: str = None) -> List[Dict[str, Any]]:
+def read_excel_batches(excel_path: str, initials_col: str, initials_val: str, release_col: str, excel_password: str = None) -> List[Dict[str, Any]]:
     """Read Excel file with proper format and password handling"""
     if not Path(excel_path).exists():
         logger.warning(f"Excel file not found: {excel_path}")
@@ -321,12 +321,11 @@ def read_excel_batches(excel_path: str, initials_col: str, initials_val: str, re
         logger.info(f"Excel data loaded: {len(df)} rows, {len(df.columns)} columns")
         logger.info(f"Available columns: {list(df.columns)}")
 
-        logger.info(f"Filtering by {initials_col}='{initials_val}', empty {release_col}, and empty {release_qty_col}")
+        logger.info(f"Filtering by {initials_col}='{initials_val}' and empty {release_col}")
         
         filtered_df = df[
             (df[initials_col].astype(str).str.upper() == initials_val.upper()) &
-            (df[release_col].isna() | (df[release_col].astype(str).str.strip() == "")) &
-            (df[release_qty_col].isna() | (df[release_qty_col].astype(str).str.strip() == ""))
+            (df[release_col].isna() | (df[release_col].astype(str).str.strip() == ""))
         ]
 
         batches = filtered_df.to_dict("records")
@@ -408,7 +407,6 @@ def find_batch_folder(batch_id: str, batch_docs_path: str, max_depth: int = 3, e
     return None
 
 
-
 def has_qa_checklist(batch_folder: Path) -> bool:
     """Check if batch folder contains QA checklist files"""
     try:
@@ -471,6 +469,7 @@ File Transfer Automation System
     except Exception as e:
         logger.error(f"Failed to send QA notifications: {e}")
 
+
 if __name__ == "__main__":
     import argparse
     
@@ -494,7 +493,6 @@ if __name__ == "__main__":
             criteria["initials_column"], 
             criteria["initials_value"], 
             criteria["release_status_column"],
-            criteria["release_quantity_column"],
             excel_password
         )
         

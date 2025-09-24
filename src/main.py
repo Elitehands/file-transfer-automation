@@ -55,12 +55,11 @@ def run_transfer_workflow(config: dict, test_mode: bool = False) -> bool:
 
         logger.info("Reading Excel file and filtering batches")
         batches = read_excel_batches(
-            paths["excel_file"],
-            filter_criteria["initials_column"],
-            filter_criteria["initials_value"],
-            filter_criteria["release_status_column"],
-            filter_criteria["release_quantity_column"],
-            excel_password 
+        paths["excel_file"],
+        filter_criteria["initials_column"],
+        filter_criteria["initials_value"],
+        filter_criteria["release_status_column"],
+        excel_password 
         )
 
         if not batches:
@@ -68,7 +67,7 @@ def run_transfer_workflow(config: dict, test_mode: bool = False) -> bool:
             return True
 
         logger.info(f"Processing {len(batches)} batches")
-        results = process_all_batches(batches, paths)
+        results = process_all_batches(batches, paths, config)
 
         if config.get("notifications", {}).get("enabled", False):
             logger.info("Sending completion notification")

@@ -103,6 +103,8 @@ def _send_email(subject: str, message: str, notifications: Dict[str, Any]) -> bo
 
 if __name__ == "__main__":
     import argparse
+    
+    sys.path.insert(0, str(Path(__file__).parent.parent))
     from src.settings import load_config
     
     logging.basicConfig(level=logging.INFO, 
