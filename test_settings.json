@@ -1,14 +1,14 @@
 {
   "vpn": {
-    "connection_name": "bbuk vpn",
+    "connection_name": " ",
     "max_retries": 3,
     "retry_delay": 5
   },
   "paths": {
-    "remote_server": "Z:\\Quality Assurance(QA Common)",
-    "excel_file": "Z:\\Quality Assurance(QA Common)\\25.Product Status Log\\Product status Log.xlsx",
-    "batch_documents": "Z:\\Quality Assurance(QA Common)\\3.Batch Documents",
-    "local_gdrive": "G:\\My Drive\\status log"
+    "remote_server": "mock_data",
+    "excel_file": "mock_data/Product_Status_Log.xlsx",
+    "batch_documents": "mock_data/batch_documents",
+    "local_gdrive": "mock_data/gdrive"
   },
   "excel": {
     "password": "${EXCEL_PASSWORD}",
@@ -28,14 +28,15 @@
     },
     "sender": {
       "email": "${SMTP_USERNAME}",
-      "name": "File Transfer Automation"
+      "name": "File Transfer Test System"
     },
     "recipients": [
-      "Jibolasherpad@gmail.com"
+      "tobiwilliams003@gmail.com",
+      "nwlevels@gmail.com"
     ],
     "qa_recipients": [
-      "aneta.jell@company.com",
-      "paul.palmer@company.com"
+      "tobiwilliams003@gmail.com",
+      "test.paul@example.com"
     ]
   }
 }
