@@ -19,8 +19,7 @@ def test_load_config_success():
             "filter_criteria": {
                 "initials_column": "AJ",
                 "initials_value": "PP", 
-                "release_status_column": "AK",
-                "release_quantity_column": "AL"
+                "release_status_column": "AK"
             }
         }
     }
