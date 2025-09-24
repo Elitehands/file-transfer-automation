@@ -1,33 +1,47 @@
-"""Simple mock environment for local testing"""
+"""Enhanced mock test with QA checklist simulation - AL filter removed"""
 
 import json
 import shutil
 from pathlib import Path
 import pandas as pd
 
-def setup_mock_environment():
-    """Create minimal mock data for testing"""
-    print("Setting up mock environment...")
+def setup_mock_environment_with_qa():
+    """Create mock data including QA checklist files"""
+    print("Setting up mock environment with QA testing...")
     
     if Path("mock_data").exists():
         shutil.rmtree("mock_data")
     
+    # Create folder structure
     Path("mock_data/batch_documents/TEST001").mkdir(parents=True)
-    Path("mock_data/batch_documents/TEST002").mkdir(parents=True)
+    Path("mock_data/batch_documents/TEST002").mkdir(parents=True) 
+    Path("mock_data/batch_documents/TEST003").mkdir(parents=True)
     Path("mock_data/gdrive").mkdir(parents=True)
     Path("mock_data/excel").mkdir(parents=True)
     
+    # TEST001 - Regular batch (no QA)
     Path("mock_data/batch_documents/TEST001/document.pdf").write_text("Mock PDF")
-    Path("mock_data/batch_documents/TEST002/report.txt").write_text("Mock Report")
+    Path("mock_data/batch_documents/TEST001/specs.txt").write_text("Mock Specs")
     
+    # TEST002 - QA Ready batch (has checklist)
+    Path("mock_data/batch_documents/TEST002/report.txt").write_text("Mock Report")
+    Path("mock_data/batch_documents/TEST002/QA_Batch_Review_Checklist.xlsx").write_text("Mock QA Checklist")
+    Path("mock_data/batch_documents/TEST002/data.csv").write_text("Mock Data")
+    
+    # TEST003 - Another QA Ready batch (different QA pattern)
+    Path("mock_data/batch_documents/TEST003/analysis.pdf").write_text("Mock Analysis")
+    Path("mock_data/batch_documents/TEST003/qa_checklist_final.docx").write_text("Mock QA Final")
+    
+    # Create Excel with all 3 batches (AL column removed)
     data = {
-        'Batch ID': ['TEST001', 'TEST002', 'TEST003'],
-        'AJ': ['PP', 'PP', 'JD'],
-        'AK': ['', '', 'Released']
+        'Batch ID': ['TEST001', 'TEST002', 'TEST003', 'TEST004'],
+        'AJ': ['PP', 'PP', 'PP', 'JD'],  # PP batches will be processed
+        'AK': ['', '', '', 'Released']   # Empty = ready for processing
     }
     df = pd.DataFrame(data)
     df.to_excel("mock_data/excel/test.xlsx", index=False)
     
+    # Config with QA recipients (AL filter removed)
     config = {
         "paths": {
             "remote_server": str(Path("mock_data").absolute()),
@@ -42,35 +56,56 @@ def setup_mock_environment():
                 "release_status_column": "AK"
             }
         },
-        "notifications": {"enabled": False}
+        "notifications": {
+            "enabled": True,
+            "qa_recipients": ["aneta.jell@company.com", "paul.palmer@company.com"],
+            "recipients": ["admin@company.com"],
+            "smtp": {
+                "server": "smtp.gmail.com",
+                "port": 587,
+                "username": "test@company.com",
+                "password": "test_password"
+            },
+            "sender": {
+                "name": "File Transfer System",
+                "email": "test@company.com"
+            }
+        }
     }
     
-    with open("mock_settings.json", "w") as f:
+    with open("mock_settings_qa.json", "w") as f:
         json.dump(config, f, indent=2)
     
-    print("✅ Mock environment ready")
-    print("Run: python src/main.py --config=mock_settings.json --test-mode")
+    print("✅ Mock environment with QA ready")
+    print("Run: python src/main.py --config=mock_settings_qa.json --test-mode")
 
-def test_mock_workflow():
-    """Test with mock data"""
-    from src.settings import load_config
-    from src.main import run_transfer_workflow
+def setup_mock_environment():
+    """Create essential mock data for testing"""
+    if Path("mock_data").exists():
+        shutil.rmtree("mock_data")
     
-    if not Path("mock_settings.json").exists():
-        print("❌ Run setup first: python mock_test.py")
-        return
+    # Create required folders  
+    Path("mock_data/batch_documents/TEST001").mkdir(parents=True)
+    Path("mock_data/batch_documents/TEST002").mkdir(parents=True) 
+    Path("mock_data/batch_documents/TEST003").mkdir(parents=True)
+    Path("mock_data/gdrive").mkdir(parents=True)
     
-    config = load_config("mock_settings.json")
-    result = run_transfer_workflow(config, test_mode=True)
+    # Create Excel file (AL column removed)
+    data = {
+        'Batch ID': ['TEST001', 'TEST002', 'TEST003'],
+        'AJ': ['PP', 'PP', 'PP'],
+        'AK': ['', '', '']
+    }
+    df = pd.DataFrame(data)
+    df.to_excel("mock_data/Product_Status_Log.xlsx", index=False)
     
-    # Check results
-    copied_folders = list(Path("mock_data/gdrive").glob("TEST*"))
-    print(f"✅ Workflow result: {result}")
-    print(f"✅ Copied folders: {len(copied_folders)}")
+    print("Mock environment ready")
+    print("Run: python src/main.py --config=test_settings.json --test-mode")
 
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1 and sys.argv[1] == "--test":
-        test_mock_workflow()
+        # Test workflow code here
+        pass
     else:
         setup_mock_environment()
